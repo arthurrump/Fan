@@ -1,5 +1,6 @@
 module Canvas
 
+open Fable.Core
 open Browser.Types
 
 type CanvasRenderingContext2D with
@@ -11,3 +12,7 @@ type CanvasRenderingContext2D with
         ctx.ellipse (x, y, radiusX, radiusY, rotation, startAngle, endAngle, false)
     member ctx.square (x, y, size) =
         ctx.rect (x, y, size, size)
+
+let inline rgb (r, g, b) = U3.Case1 (sprintf "rgb(%f, %f, %f)" (float r) (float g) (float b))
+let inline rgba (r, g, b, a) = U3.Case1 (sprintf "rgba(%f, %f, %f, %f)" (float r) (float g) (float b) a)
+let inline color (str : string) = U3.Case1 str

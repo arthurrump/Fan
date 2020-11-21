@@ -5,107 +5,94 @@ open Browser.Dom
 type Easing = 
     | Linear 
     | Custom of (float -> float)
-type Key = 
-    { value : float option
-      duration : float option
-      delay : float
-      easing : Easing }
-
-type KeyBuilder() =
-    member __.Yield _ = { value = None; duration = None; delay = 0.; easing = Linear }
-    [<CustomOperation("value")>]
-    member __.Value (key : Key, value) = { key with value = Some value }
-    member this.Value (key : Key, value : int) = this.Value (key, float value)
-    [<CustomOperation("duration")>]
-    member __.Duration (key : Key, duration) = { key with duration = Some duration }
-    member this.Duration (key : Key, duration : int) = this.Duration (key, float duration)
-    [<CustomOperation("delay")>]
-    member __.Delay' (key : Key, delay) = { key with delay = delay }
-    member this.Delay' (key : Key, delay : int) = this.Delay' (key, float delay)
-    [<CustomOperation("easing")>]
-    member __.Easing (key : Key, easing) = { key with easing = easing }
-
-let key = KeyBuilder()
 
 let private easingFunction = function
     | Linear -> fun x -> x
     | Custom f -> f
 
-type AnimationDirection = 
+type Key = 
+    { Value : float option
+    //   duration : float option
+    //   delay : float
+      Easing : Easing }
+
+type KeyBuilder() =
+    member __.Yield _ = { Value = None; (*duration = None; delay = 0.;*) Easing = Linear }
+    [<CustomOperation("value")>]
+    member __.Value (key : Key, value) = { key with Value = Some value }
+    member this.Value (key : Key, value : int) = this.Value (key, float value)
+    // [<CustomOperation("duration")>]
+    // member __.Duration (key : Key, duration) = { key with duration = Some duration }
+    // member this.Duration (key : Key, duration : int) = this.Duration (key, float duration)
+    // [<CustomOperation("delay")>]
+    // member __.Delay' (key : Key, delay) = { key with delay = delay }
+    // member this.Delay' (key : Key, delay : int) = this.Delay' (key, float delay)
+    [<CustomOperation("easing")>]
+    member __.Easing (key : Key, easing) = { key with Easing = easing }
+
+let key = KeyBuilder()
+
+let (=>) x y = x, y
+
+type Var = string * Key
+type VarsBuilder() =
+    member __.Zero () = []
+    member __.Yield (var : Var) = [ var ]
+    member this.Yield ((var, v) : string * float) = this.Yield ((var, key { value v }))
+    member this.Yield ((var, v) : string * int) = this.Yield ((var, float v))
+    member __.Combine (x : Var list, y) = x @ y
+    member __.Delay (f) = f()
+
+let vars = VarsBuilder()
+
+type Timestamp = float * Var list
+type Direction = 
     | Normal 
     | Reverse 
     | Alternate
-type AnimationLoop = 
+type Loop = 
     | Repeat of int 
     | Infinite
-type Animation = 
-    { start : float
-      keys : Key list
-      duration : float option
-      delay : float
-      direction : AnimationDirection
-      loop : AnimationLoop }
+type Timeline =
+    { Timestamps : Timestamp list
+      Direction : Direction
+      Loop : Loop }
 
-type AnimationBuilder (start: float) =
-    member __.Yield _ = { start = start; keys = []; duration = None; delay = 0.; direction = Normal; loop = Repeat 1 }
-    [<CustomOperation("keys")>]
-    member __.Keys (animation : Animation, keys) = { animation with keys = keys }
-    [<CustomOperation("duration")>]
-    member __.Duration (animation : Animation, duration) = { animation with duration = Some duration }
-    member this.Duration (animation : Animation, duration : int) = this.Duration (animation, float duration)
-    [<CustomOperation("delay")>]
-    member __.Delay' (animation : Animation, delay) = { animation with delay = delay }
-    member this.Delay' (animation : Animation, delay : int) = this.Delay' (animation, float delay)
-    [<CustomOperation("direction")>]
-    member __.Direction (animation : Animation, direction) = { animation with direction = direction }
-    [<CustomOperation("loop")>]
-    member __.Loop (animation : Animation, loop) = { animation with loop = loop }
+module Timeline =
+    let delay timeDelay timeline =
+        let ts = 
+            timeline.Timestamps 
+            |> List.map (fun (t, vars) -> t + timeDelay, vars)
+        { timeline with Timestamps = ts }
 
-    member __.Run (animation : Animation) =
-        let totalTimeCovered = 
-            animation.keys |> List.sumBy (fun key -> key.delay + (key.duration |> Option.defaultValue 0.))
-        let unsetKeys = animation.keys |> List.filter (fun key -> key.duration = None) |> List.length
-
-        let totalDur =
-            match animation.duration with
-            | Some dur -> 
-                if totalTimeCovered > dur then
-                    console.warn("Keyframes starting at value", animation.start, "specify a longer duration than",
-                        "the total animation. Animation duration will be ignored.")
-                    totalTimeCovered
-                else dur
-            | None ->
-                if unsetKeys = 0 then 
-                    console.warn("Animation starting at value", animation.start, 
-                        "does not have a global duration, nor durations set for all keyframes.",
-                        "Keyframes without a duration will be reduced to 0.")
-                totalTimeCovered
-
-        let starDuration = if unsetKeys > 0 then (totalDur - totalTimeCovered) / float unsetKeys else 0.
-
-        let keyframes =
-            animation.keys 
-            |> List.map (fun key -> 
-                {| value = key.value
-                   duration = key.duration |> Option.defaultValue starDuration
-                   delay = key.delay
-                   easing = easingFunction key.easing |})
-            |> List.mapFold (fun (t, prevVal) key ->
-                    {| key with startTime = t + key.delay; prev = prevVal |}, 
-                    (t + key.delay + key.duration, key.value |> Option.defaultValue prevVal)
-                ) (0., animation.start)
-            |> fst
-            |> List.map (fun key -> 
-                {| startTime = key.startTime 
-                   endTime = key.startTime + key.duration
-                   value = fun t -> 
-                    key.prev + (t - key.startTime) * 
-                    (((key.value |> Option.defaultValue key.prev) - key.prev) / key.duration) 
-                |})
-
+let private calculateTimeline (timeline : Timeline) =
+    let ts = timeline.Timestamps |> List.sortBy fst
+    let totalDur = ts |> List.last |> fst
+    let chooseKeys var (t, vars) = 
+        vars 
+        |> List.tryFind (fun (v, _) -> v = var) 
+        |> Option.map (fun (_, key) -> (t, key))
+    let getKeys var = 
+        let keys = ts |> List.choose (chooseKeys var)
+        keys 
+        |> List.mapFold (fun (startTime, prev) (endTime, key) ->
+            let value = key.Value |> Option.defaultValue prev
+            let valueFunc t = 
+                let duration = endTime - startTime
+                let progression = (t - startTime) / duration
+                let easedProgression = easingFunction key.Easing progression
+                prev + (value - prev) * easedProgression
+            {| StartTime = startTime; EndTime = endTime
+               Value = valueFunc |},
+            (endTime, value)) (0., (snd keys.Head).Value |> Option.defaultValue 0.)
+        |> fst
+    ts |> List.collect snd |> List.map fst |> List.distinct
+    |> List.map (fun var -> var, getKeys var)
+    |> Map.ofList
+    |> Map.map (fun _ keys ->    
         fun t -> 
             let t =
-                match animation.direction, animation.loop with
+                match timeline.Direction, timeline.Loop with
                 | Normal, Infinite -> 
                     t % totalDur
                 | Reverse, Infinite -> 
@@ -126,17 +113,41 @@ type AnimationBuilder (start: float) =
                         let t = t % (2. * totalDur)
                         if t > totalDur then 2. * totalDur - t else t
                     else float (i % 2) * totalDur
-            let key = keyframes |> List.tryFind (fun key -> key.startTime <= t && t < key.endTime)
+            let key = keys |> List.tryFind (fun key -> key.StartTime <= t && t < key.EndTime)
             match key with
             | Some key ->   
-                key.value t
-            | None when t < keyframes.Head.startTime ->
-                animation.start
+                key.Value t
+            | None when t < keys.Head.StartTime ->
+                keys.Head.Value 0.
             | None ->
-                let key = keyframes |> List.findBack (fun key -> t >= key.endTime)
-                key.value key.endTime
+                let key = keys |> List.findBack (fun key -> t >= key.EndTime)
+                key.Value key.EndTime
+    )
 
-let inline animation start = AnimationBuilder (float start)
+type CalculatedTimeline(timeline : Timeline) =
+    let animationFunctions = calculateTimeline timeline
+    member __.Timeline = timeline
+    member __.Item (var) = animationFunctions.[var]
+
+type TimelineBuilder(?direction, ?loop) =
+    let direction = defaultArg direction Normal
+    let loop = defaultArg loop (Repeat 1)
+
+    member __.Zero () = 
+        { Timestamps = []; Direction = direction; Loop = loop }
+    member __.Yield (ts : Timestamp) = 
+        { Timestamps = [ ts ]; Direction = direction; Loop = loop }
+    member this.Yield ((t, var) : int * Var list) = 
+        this.Yield ((float t, var))
+    member __.Delay (f) = 
+        f()
+    member __.Combine (t1 : Timeline, t2 : Timeline) = 
+        { t1 with Timestamps = t1.Timestamps @ t2.Timestamps }
+    member __.Run (timeline) = 
+        CalculatedTimeline(timeline)
+
+let timeline = TimelineBuilder()
+let timeline' (direction, loop) = TimelineBuilder (direction, loop)
 
 let runAnimation render =
     let mutable start = 0.
