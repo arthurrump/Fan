@@ -34,18 +34,18 @@ let key = KeyBuilder()
 
 let (=>) x y = x, y
 
-type Var = string * Key
-type VarsBuilder() =
+type Var<'t> = 't * Key
+type VarsBuilder<'t>() =
     member __.Zero () = []
-    member __.Yield (var : Var) = [ var ]
-    member this.Yield ((var, v) : string * float) = this.Yield ((var, key { value v }))
-    member this.Yield ((var, v) : string * int) = this.Yield ((var, float v))
-    member __.Combine (x : Var list, y) = x @ y
+    member __.Yield (var : Var<'t>) = [ var ]
+    member this.Yield ((var, v) : 't * float) = this.Yield ((var, key { value v }))
+    member this.Yield ((var, v) : 't * int) = this.Yield ((var, float v))
+    member __.Combine (x : Var<'t> list, y) = x @ y
     member __.Delay (f) = f()
 
-let vars = VarsBuilder()
+let vars<'t> = VarsBuilder<'t>()
 
-type Timestamp = float * Var list
+type Timestamp<'t> = float * Var<'t> list
 type Direction = 
     | Normal 
     | Reverse 
@@ -53,8 +53,8 @@ type Direction =
 type Loop = 
     | Repeat of int 
     | Infinite
-type Timeline =
-    { Timestamps : Timestamp list
+type Timeline<'t> =
+    { Timestamps : Timestamp<'t> list
       Direction : Direction
       Loop : Loop }
 
@@ -65,7 +65,7 @@ module Timeline =
             |> List.map (fun (t, vars) -> t + timeDelay, vars)
         { timeline with Timestamps = ts }
 
-let private calculateTimeline (timeline : Timeline) =
+let private calculateTimeline timeline =
     let ts = timeline.Timestamps |> List.sortBy fst
     let totalDur = ts |> List.last |> fst
     let chooseKeys var (t, vars) = 
@@ -83,7 +83,7 @@ let private calculateTimeline (timeline : Timeline) =
                 let easedProgression = easingFunction key.Easing progression
                 prev + (value - prev) * easedProgression
             {| StartTime = startTime; EndTime = endTime
-               Value = valueFunc |},
+               Value = value; ValueFunc = valueFunc |},
             (endTime, value)) (0., (snd keys.Head).Value |> Option.defaultValue 0.)
         |> fst
     ts |> List.collect snd |> List.map fst |> List.distinct
@@ -116,15 +116,15 @@ let private calculateTimeline (timeline : Timeline) =
             let key = keys |> List.tryFind (fun key -> key.StartTime <= t && t < key.EndTime)
             match key with
             | Some key ->   
-                key.Value t
-            | None when t < keys.Head.StartTime ->
-                keys.Head.Value 0.
+                key.ValueFunc t
+            | None when t < keys.Head.StartTime || keys.Length = 1 ->
+                keys.Head.Value
             | None ->
                 let key = keys |> List.findBack (fun key -> t >= key.EndTime)
-                key.Value key.EndTime
+                key.Value
     )
 
-type CalculatedTimeline(timeline : Timeline) =
+type CalculatedTimeline<'t when 't : comparison>(timeline : Timeline<'t>) =
     let animationFunctions = calculateTimeline timeline
     member __.Timeline = timeline
     member __.Item (var) = animationFunctions.[var]
@@ -135,13 +135,13 @@ type TimelineBuilder(?direction, ?loop) =
 
     member __.Zero () = 
         { Timestamps = []; Direction = direction; Loop = loop }
-    member __.Yield (ts : Timestamp) = 
+    member __.Yield (ts) = 
         { Timestamps = [ ts ]; Direction = direction; Loop = loop }
-    member this.Yield ((t, var) : int * Var list) = 
+    member this.Yield ((t, var) : int * Var<'t> list) = 
         this.Yield ((float t, var))
     member __.Delay (f) = 
         f()
-    member __.Combine (t1 : Timeline, t2 : Timeline) = 
+    member __.Combine (t1, t2) = 
         { t1 with Timestamps = t1.Timestamps @ t2.Timestamps }
     member __.Run (timeline) = 
         CalculatedTimeline(timeline)

@@ -48,7 +48,7 @@ module Cloud =
         ctx.ellipse (40., -15., 40., 30.)
         ctx.ellipse (10., 5., 10.)
 
-        ctx.fillStyle <- U3.Case1 "grey"
+        ctx.fillStyle <- rgba (200, 200, 200, 0.9)
         ctx.fill ()
 
         ctx.restore ()
@@ -56,44 +56,55 @@ module Cloud =
 let cnv = document.getElementById "animation" :?> HTMLCanvasElement
 let ctx = cnv.getContext_2d ()
 
-// let render t =
-//     ctx.fillStyle <- U3.Case1 "rgba(10, 100, 200, 1)"
-//     ctx.clearRect (0., 0., cnv.width, cnv.height)
+type AnimationVars = SunRadius | SunRayLength | SunRayRotation | CloudX
 
-//     ctx.save ()
-//     ctx.translate (250., 200.)
-//     ctx |> Sun.draw {
-//         Sun.Radius = t |> animation 100 { 
-//             keys [ key { value 102 } ]
-//             duration 600
-//             direction Alternate
-//             loop Infinite 
-//         }
-//         Sun.RayLength = t |> animation 50 { 
-//             keys [ key { value 100 } ]
-//             duration 1000
-//             direction Alternate
-//             loop Infinite
-//         }
-//         Sun.RayRotation = t |> animation 0 {
-//             keys [ key { value (2. * Math.PI) } ]
-//             duration 11500
-//             loop Infinite
-//         }
-//     }
-//     ctx.restore ()
+let render t =
+    let tl = timeline' (Alternate, Infinite) {
+        0 => vars {
+            SunRadius => 100
+            SunRayLength => 50
+        }
+        600 => vars {
+             SunRadius => 102
+        }
+        1000 => vars {
+            SunRayLength => 100
+        }
+    }
 
-//     ctx.save ()
-//     let x = t |> animation -200 {
-//         keys [ key { value (cnv.width + 100.) } ]
-//         duration 4300
-//         loop Infinite
-//     }
-//     ctx.translate (x, 350.)
-//     ctx |> Cloud.draw { Cloud.Size = 2. }
-//     ctx.restore ()
+    let tl2 = timeline' (Normal, Infinite) {
+        0 => vars {
+            SunRayRotation => 0
+            CloudX => -200
+        }
+        3000 => vars {
+            SunRayRotation => 0.5 * Math.PI
+            CloudX => cnv.width + 100.
+        }
+    }
 
-// runAnimation render
+    ctx.fillStyle <- U3.Case1 "rgba(10, 100, 200, 1)"
+    ctx.clearRect (0., 0., cnv.width, cnv.height)
+
+    ctx.save ()
+    ctx.translate (250., 200.)
+    let sun = {
+        Sun.Radius = tl.[SunRadius] t
+        Sun.RayLength = tl.[SunRayLength] t
+        Sun.RayRotation = tl2.[SunRayRotation] t
+    }
+    printfn "Sun = %A" sun
+    ctx |> Sun.draw sun
+    ctx.restore ()
+
+    ctx.save ()
+    let x = tl2.[CloudX] t
+    printfn "CloudX = %f" x
+    ctx.translate (x, 350.)
+    ctx |> Cloud.draw { Cloud.Size = 2. }
+    ctx.restore ()
+
+runAnimation render
 
 let tl = timeline' (Alternate, Repeat 3) {
     100 => vars {
@@ -119,4 +130,4 @@ let scene =
         ctx.fillStyle <- rgb (255, 20, 100)
         ctx.fill ()
 
-runAnimation scene
+// runAnimation scene
