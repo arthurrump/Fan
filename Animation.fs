@@ -1,44 +1,94 @@
 module Animation
 
+open System
 open Browser.Dom
 
 type Easing = 
-    | Linear 
+    | Linear
+    | EaseInSine | EaseOutSine | EaseInOutSine
+    | EaseInQuad | EaseOutQuad | EaseInOutQuad
+    | EaseInCubic | EaseOutCubic | EaseInOutCubic
+    | EaseInQuart | EaseOutQuart | EaseInOutQuart
+    | EaseInQuint | EaseOutQuint | EaseInOutQuint
+    | EaseInExpo | EaseOutExpo | EaseInOutExpo
+    | EaseInCirc | EaseOutCirc | EaseInOutCirc
+    | EaseInBack | EaseOutBack | EaseInOutBack
+    | EaseInElastic | EaseOutElastic | EaseInOutElastic
     | Custom of (float -> float)
 
-let private easingFunction = function
+// https://easings.net/
+let private easingFunction : Easing -> (float -> float) = 
+    let inpow p = fun x -> x**p
+    let outpow p = fun x -> 1. - (1. - x)**p
+    let inoutpow p = fun x -> if x < 0.5 then 2.**(p-1.) * x**p else 1. - (-2.*x + 2.)**p / 2.
+    let c1 = 1.70158
+    let c2 = c1 * 1.525
+    let c3 = c1 + 1.
+    let c4 = (2. * Math.PI) / 3.
+    let c5 = (2. * Math.PI) / 4.5
+    let n1 = 7.5625
+    let d1 = 2.75
+    function
     | Linear -> fun x -> x
+    | EaseInSine -> fun x -> 1. - cos(x * Math.PI / 2.)
+    | EaseOutSine -> fun x -> sin(x * Math.PI / 2.)
+    | EaseInOutSine -> fun x -> -(cos(Math.PI * x) - 1.) / 2.
+    | EaseInQuad -> inpow 2.
+    | EaseOutQuad -> outpow 2.
+    | EaseInOutQuad -> inoutpow 2.
+    | EaseInCubic -> inpow 3.
+    | EaseOutCubic -> outpow 3.
+    | EaseInOutCubic -> inoutpow 3.
+    | EaseInQuart -> inpow 4.
+    | EaseOutQuart -> outpow 4.
+    | EaseInOutQuart -> inoutpow 4.
+    | EaseInQuint -> inpow 5.
+    | EaseOutQuint -> outpow 5.
+    | EaseInOutQuint -> inoutpow 5.
+    | EaseInExpo -> 
+        fun x -> if x = 0. then 0. else 2.**(10.*x - 10.)
+    | EaseOutExpo -> 
+        fun x -> if x = 1. then 1. else 1. - 2.**(-10.*x)
+    | EaseInOutExpo -> 
+        fun x -> if x = 0. || x = 1. then x 
+                 elif x < 0.5 then 2.**(20.*x - 10.) / 2. 
+                 else (2. - 2.**(-20.*x + 10.)) / 2.
+    | EaseInCirc ->
+        fun x -> 1. - sqrt(1. - x**2.)
+    | EaseOutCirc ->
+        fun x -> sqrt(1. - (x - 1.)**2.)
+    | EaseInOutCirc ->
+        fun x -> if x < 0.5 then (1. - sqrt(1. - (2.*x)**2.)) / 2. 
+                 else (sqrt(1. - (-2.*x + 2.)**2.) + 1.) / 2.
+    | EaseInBack ->
+        fun x -> c3 * x**3. - c1 * x**2.
+    | EaseOutBack ->
+        fun x -> 1. + c3 * (x-1.)**3. + c1 * (x-1.)**2.
+    | EaseInOutBack ->
+        fun x -> if x < 0.5 then ((2.*x)**2. * ((c2+1.) * 2. * x - c2)) / 2. 
+                 else ((2.*x - 2.)**2. * ((c2+1.) * (x*2. - 2.) + c2) + 2.) / 2.
+    | EaseInElastic ->
+        fun x -> if x = 0. || x = 1. then x else -2.**(10.*x - 10.) * sin((x*10. - 10.75) * c4)
+    | EaseOutElastic ->
+        fun x -> if x = 0. || x = 1. then x else 2.**(-10.*x) * sin((x*10. - 0.75) * c4) + 1.
+    | EaseInOutElastic ->
+        fun x -> if x = 0. || x = 1. then x
+                 elif x < 0.5 then -(2.**(20.*x - 10.) * sin((20.*x - 11.125) * c5)) / 2.
+                 else (2.**(-20.*x + 10.) * sin((20.*x - 11.125) * c5)) / 2. + 1.
     | Custom f -> f
 
 type Key = 
-    { Value : float option
-    //   duration : float option
-    //   delay : float
+    { Value : float
       Easing : Easing }
-
-type KeyBuilder() =
-    member __.Yield _ = { Value = None; (*duration = None; delay = 0.;*) Easing = Linear }
-    [<CustomOperation("value")>]
-    member __.Value (key : Key, value) = { key with Value = Some value }
-    member this.Value (key : Key, value : int) = this.Value (key, float value)
-    // [<CustomOperation("duration")>]
-    // member __.Duration (key : Key, duration) = { key with duration = Some duration }
-    // member this.Duration (key : Key, duration : int) = this.Duration (key, float duration)
-    // [<CustomOperation("delay")>]
-    // member __.Delay' (key : Key, delay) = { key with delay = delay }
-    // member this.Delay' (key : Key, delay : int) = this.Delay' (key, float delay)
-    [<CustomOperation("easing")>]
-    member __.Easing (key : Key, easing) = { key with Easing = easing }
-
-let key = KeyBuilder()
 
 let (=>) x y = x, y
 
 type Var<'t> = 't * Key
 type VarsBuilder<'t>() =
     member __.Zero () = []
-    member __.Yield (var : Var<'t>) = [ var ]
-    member this.Yield ((var, v) : 't * float) = this.Yield ((var, key { value v }))
+    member __.Yield ((var, (v, e))) = [ var, { Value = v; Easing = e } ]
+    member this.Yield ((var, (v, e)) : 't * (int * Easing)) = this.Yield ((var, (float v, e)))
+    member this.Yield ((var, v) : 't * float) = this.Yield ((var, (v, Linear)))
     member this.Yield ((var, v) : 't * int) = this.Yield ((var, float v))
     member __.Combine (x : Var<'t> list, y) = x @ y
     member __.Delay (f) = f()
@@ -76,15 +126,14 @@ let private calculateTimeline timeline =
         let keys = ts |> List.choose (chooseKeys var)
         keys 
         |> List.mapFold (fun (startTime, prev) (endTime, key) ->
-            let value = key.Value |> Option.defaultValue prev
             let valueFunc t = 
                 let duration = endTime - startTime
                 let progression = (t - startTime) / duration
                 let easedProgression = easingFunction key.Easing progression
-                prev + (value - prev) * easedProgression
+                prev + (key.Value - prev) * easedProgression
             {| StartTime = startTime; EndTime = endTime
-               Value = value; ValueFunc = valueFunc |},
-            (endTime, value)) (0., (snd keys.Head).Value |> Option.defaultValue 0.)
+               Value = key.Value; ValueFunc = valueFunc |},
+            (endTime, key.Value)) (0., (snd keys.Head).Value)
         |> fst
     ts |> List.collect snd |> List.map fst |> List.distinct
     |> List.map (fun var -> var, getKeys var)

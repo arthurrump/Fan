@@ -68,7 +68,7 @@ let render t =
              SunRadius => 102
         }
         1000 => vars {
-            SunRayLength => 100
+            SunRayLength => (100, EaseOutBack)
         }
     }
 
@@ -79,7 +79,7 @@ let render t =
         }
         3000 => vars {
             SunRayRotation => 0.5 * Math.PI
-            CloudX => cnv.width + 100.
+            CloudX => (cnv.width + 100., EaseOutSine)
         }
     }
 
@@ -115,7 +115,7 @@ let tl = timeline' (Alternate, Repeat 3) {
         "rectOffset" => 0.
     }
     2000 => vars {
-        "rectSize" => key { value 100; easing Linear }
+        "rectSize" => (100, EaseInOutBack)
         "rectOffset" => 20.
     }
 }
