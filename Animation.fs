@@ -3,6 +3,16 @@ module Animation
 open System
 open Browser.Dom
 
+module List =
+    let duplicates list =
+        let (duplicates, _) =
+            List.mapFold (fun found elem -> 
+                if found |> Set.contains elem 
+                then Some elem, found 
+                else None, found |> Set.add elem
+            ) (Set.empty) list
+        duplicates |> List.choose id
+
 type Easing = 
     | Linear
     | EaseInSine | EaseOutSine | EaseInOutSine
@@ -105,15 +115,29 @@ type Loop =
     | Infinite
 type Timeline<'t> =
     { Timestamps : Timestamp<'t> list
+      Delay : float
       Direction : Direction
       Loop : Loop }
 
-module Timeline =
-    let delay timeDelay timeline =
-        let ts = 
-            timeline.Timestamps 
-            |> List.map (fun (t, vars) -> t + timeDelay, vars)
-        { timeline with Timestamps = ts }
+type TimelineBuilder(?direction, ?loop) =
+    let direction = defaultArg direction Normal
+    let loop = defaultArg loop (Repeat 1)
+
+    member __.Zero () = 
+        []
+    member __.Yield (ts : Timestamp<'t>) = 
+        [ ts ]
+    member this.Yield ((t, var) : int * Var<'t> list) = 
+        this.Yield ((float t, var))
+    member __.Delay (f) = 
+        f()
+    member __.Combine (t1 : Timestamp<'t> list, t2) = 
+        t1 @ t2
+    member __.Run (timestamps) = 
+        { Timestamps = timestamps; Delay = 0.; Direction = direction; Loop = loop }
+
+let timeline = TimelineBuilder()
+let timeline' (direction, loop) = TimelineBuilder (direction, loop)
 
 let private calculateTimeline timeline =
     let ts = timeline.Timestamps |> List.sortBy fst
@@ -140,6 +164,7 @@ let private calculateTimeline timeline =
     |> Map.ofList
     |> Map.map (fun _ keys ->    
         fun t -> 
+            let t = t - timeline.Delay
             let t =
                 match timeline.Direction, timeline.Loop with
                 | Normal, Infinite -> 
@@ -173,30 +198,39 @@ let private calculateTimeline timeline =
                 key.Value
     )
 
-type CalculatedTimeline<'t when 't : comparison>(timeline : Timeline<'t>) =
-    let animationFunctions = calculateTimeline timeline
-    member __.Timeline = timeline
-    member __.Item (var) = animationFunctions.[var]
+type Animation<'t when 't : comparison>(timelines : Timeline<'t> list) =
+    let animationFunctions = 
+        timelines 
+        |> List.collect (calculateTimeline >> Map.toList)
+    do for var in animationFunctions |> List.map fst |> List.duplicates do
+        console.warn (
+            "Variable", var, "is defined in multiple parallel timelines.",
+            "Only the definition in the first timeline will be used.")
+    let functionsMap = 
+        animationFunctions 
+        |> List.distinctBy fst 
+        |> Map.ofList
+    member __.Timelines = timelines
+    member __.Item (var) = functionsMap.[var]
 
-type TimelineBuilder(?direction, ?loop) =
-    let direction = defaultArg direction Normal
-    let loop = defaultArg loop (Repeat 1)
-
-    member __.Zero () = 
-        { Timestamps = []; Direction = direction; Loop = loop }
-    member __.Yield (ts) = 
-        { Timestamps = [ ts ]; Direction = direction; Loop = loop }
-    member this.Yield ((t, var) : int * Var<'t> list) = 
-        this.Yield ((float t, var))
-    member __.Delay (f) = 
+type AnimationBuilder() =
+    member __.Zero () =
+        []
+    member __.Yield ((delay, timeline) : float * Timeline<'t>) =
+        [ { timeline with Delay = delay } ]
+    member this.Yield ((delay, timeline) : int * Timeline<'t>) =
+        this.Yield ((float delay, timeline))
+    member __.Yield (timeline : Timeline<'t>) =
+        [ timeline ]
+    member __.Delay (f) =
         f()
-    member __.Combine (t1, t2) = 
-        { t1 with Timestamps = t1.Timestamps @ t2.Timestamps }
-    member __.Run (timeline) = 
-        CalculatedTimeline(timeline)
+    member __.Combine (t1 : Timeline<'t> list, t2) =
+        t1 @ t2
+    member __.Run (timelines) =
+        Animation (timelines)
 
-let timeline = TimelineBuilder()
-let timeline' (direction, loop) = TimelineBuilder (direction, loop)
+let animation = AnimationBuilder()
+let animationSingle (tl : Timeline<'t>) = animation.Yield (tl) |> animation.Run
 
 let runAnimation render =
     let mutable start = 0.

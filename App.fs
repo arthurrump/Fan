@@ -58,55 +58,62 @@ let ctx = cnv.getContext_2d ()
 
 type AnimationVars = SunRadius | SunRayLength | SunRayRotation | CloudX
 
-let render t =
-    let tl = timeline' (Alternate, Infinite) {
+let tl = animation {
+    timeline' (Alternate, Infinite) {
         0 => vars {
             SunRadius => 100
             SunRayLength => 50
         }
         600 => vars {
-             SunRadius => 102
+            SunRadius => 102
         }
         1000 => vars {
             SunRayLength => (100, EaseOutBack)
         }
     }
 
-    let tl2 = timeline' (Normal, Infinite) {
+    timeline' (Normal, Infinite) {
         0 => vars {
             SunRayRotation => 0
-            CloudX => -200
+            // CloudX => -200
         }
         3000 => vars {
             SunRayRotation => 0.5 * Math.PI
-            CloudX => (cnv.width + 100., EaseOutSine)
+            //CloudX => (cnv.width + 100., EaseOutSine)
         }
     }
 
+    2000 => timeline' (Alternate, Repeat 3) {
+        0 => vars {
+            CloudX => -200
+        }
+        2000 => vars {
+            CloudX => (cnv.width + 100., EaseOutSine)
+        }
+    }
+}
+
+let render t =
     ctx.fillStyle <- U3.Case1 "rgba(10, 100, 200, 1)"
     ctx.clearRect (0., 0., cnv.width, cnv.height)
 
     ctx.save ()
     ctx.translate (250., 200.)
-    let sun = {
+    ctx |> Sun.draw {
         Sun.Radius = tl.[SunRadius] t
         Sun.RayLength = tl.[SunRayLength] t
-        Sun.RayRotation = tl2.[SunRayRotation] t
+        Sun.RayRotation = tl.[SunRayRotation] t
     }
-    printfn "Sun = %A" sun
-    ctx |> Sun.draw sun
     ctx.restore ()
 
     ctx.save ()
-    let x = tl2.[CloudX] t
-    printfn "CloudX = %f" x
-    ctx.translate (x, 350.)
+    ctx.translate (tl.[CloudX] t, 350.)
     ctx |> Cloud.draw { Cloud.Size = 2. }
     ctx.restore ()
 
 runAnimation render
 
-let tl = timeline' (Alternate, Repeat 3) {
+let tl2 = animationSingle <| timeline' (Alternate, Repeat 3) {
     100 => vars {
         "rectSize" => 0
     }
@@ -124,8 +131,8 @@ let scene =
     fun t ->
         ctx.clearRect (0., 0., cnv.width, cnv.height)
         ctx.beginPath ()
-        let offset = tl.["rectOffset"] t
-        let size = tl.["rectSize"] t
+        let offset = tl2.["rectOffset"] t
+        let size = tl2.["rectSize"] t
         ctx.rect (offset, offset, size, size)
         ctx.fillStyle <- rgb (255, 20, 100)
         ctx.fill ()
