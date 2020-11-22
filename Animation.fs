@@ -117,6 +117,13 @@ type Timeline<'t> =
       Direction : Direction
       Loop : Loop }
 
+module Timeline =
+    let inline delay delay tl =
+        { tl with Delay = (float delay) }
+    
+    let duration tl =
+        tl.Delay + (tl.Timestamps |> List.map fst |> List.max)
+
 type TimelineBuilder(?direction, ?loop) =
     let direction = defaultArg direction Normal
     let loop = defaultArg loop (Repeat 1)
@@ -196,6 +203,9 @@ let private calculateTimeline timeline =
                 key.Value
     )
 
+type AnimationDuration = 
+    | FixedDuration of float 
+    | InfiniteDuration
 type Animation<'t when 't : comparison>(timelines : Timeline<'t> list) =
     let animationFunctions = 
         timelines 
@@ -209,9 +219,15 @@ type Animation<'t when 't : comparison>(timelines : Timeline<'t> list) =
         |> List.distinctBy fst 
         |> Map.ofList
     member __.Timelines = timelines
+    member val Duration = 
+        if timelines |> List.isEmpty
+        then FixedDuration 0.
+        elif timelines |> List.exists (fun tl -> tl.Loop = Infinite)
+        then InfiniteDuration
+        else timelines |> List.map Timeline.duration |> List.max |> FixedDuration
     member __.Item (var) = functionsMap.[var]
 
-type AnimationBuilder() =
+type AnimationBuilder<'t when 't : comparison>() =
     member __.Zero () =
         []
     member __.Yield ((delay, timeline) : float * Timeline<'t>) =
@@ -224,15 +240,74 @@ type AnimationBuilder() =
         f()
     member __.Combine (t1 : Timeline<'t> list, t2) =
         t1 @ t2
-    member __.Run (timelines) =
+    member __.Run (timelines : Timeline<'t> list) =
         Animation (timelines)
 
-let animation = AnimationBuilder()
+let animation<'t when 't : comparison> = AnimationBuilder<'t>()
 let animationSingle (tl : Timeline<'t>) = animation.Yield (tl) |> animation.Run
 
-let runAnimation render =
-    let mutable start = 0.
-    let rec run render gt = 
-        render (if start = 0. then start <- gt; 0. else gt - start)
+type IAnimationValueProvider<'t when 't : comparison> =
+    abstract member Item : 't -> float
+
+type Scene<'t, 'r when 't : comparison> =
+    { EnterAnimation : Animation<'t>
+      RunAnimation : Animation<'t>
+      LeaveAnimation : Animation<'t>
+      Render : 'r -> IAnimationValueProvider<'t> -> float -> unit }
+
+type SceneBuilder<'t, 'r when 't : comparison>() =
+    let zeroAnimation = animation.Zero () |> animation<'t>.Run
+    member __.Zero () = 
+        { EnterAnimation = zeroAnimation
+          RunAnimation = zeroAnimation
+          LeaveAnimation = zeroAnimation
+          Render = fun _ _ _ -> () }
+    member this.Yield (_) =
+        this.Zero ()
+    [<CustomOperation("enter")>]
+    member __.EnterAnimation (scene, enter : Animation<'t>) =
+        if enter.Duration = InfiniteDuration then
+            console.warn (
+                "Scene with infinite enter animation detected. Please use the run animation",
+                "for repeating loops. Enter should only be used to transition into the scene.")
+        { scene with EnterAnimation = enter }
+    member this.EnterAnimation (scene, enter : Timeline<'t>) =
+        this.EnterAnimation (scene, animationSingle enter)
+    [<CustomOperation("run")>]
+    member __.RunAnimation (scene, run : Animation<'t>) =
+        { scene with RunAnimation = run }
+    member this.RunAnimation (scene, run : Timeline<'t>) =
+        this.RunAnimation (scene, animationSingle run)
+    [<CustomOperation("leave")>]
+    member __.LeaveAnimation (scene, leave : Animation<'t>) =
+        if leave.Duration = InfiniteDuration then
+            console.warn (
+                "Scene with infinite leave animation detected. Please use the run animation",
+                "for repeating loops. Leave should only be used to transition out of the scene.")
+        { scene with LeaveAnimation = leave }
+    member this.LeaveAnimation (scene, leave : Timeline<'t>) =
+        this.LeaveAnimation (scene, animationSingle leave)
+    [<CustomOperation("render")>]
+    member __.Render (scene, render) =
+        { scene with Render = render }
+    member this.Render (scene, render : 'r -> IAnimationValueProvider<'t> -> unit) =
+        this.Render (scene, fun r a _ -> render r a)
+    member this.Render (scene, render : 'r -> unit) =
+        this.Render (scene, fun r _ _ -> render r)
+
+let scene<'t, 'r when 't : comparison> = SceneBuilder<'t, 'r>()
+
+module Scene =
+    let runRender render =
+        let mutable start = 0.
+        let rec run render gt = 
+            render (if start = 0. then start <- gt; 0. else gt - start)
+            window.requestAnimationFrame (run render) |> ignore
         window.requestAnimationFrame (run render) |> ignore
-    window.requestAnimationFrame (run render) |> ignore
+       
+    let run scene r =
+        let anim t = fun var -> scene.RunAnimation.[var] t
+        let render t = 
+            let anim = anim t
+            scene.Render r ({ new IAnimationValueProvider<'t> with member __.Item (var) = anim var }) t
+        runRender render
