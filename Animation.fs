@@ -36,8 +36,6 @@ let private easingFunction : Easing -> (float -> float) =
     let c3 = c1 + 1.
     let c4 = (2. * Math.PI) / 3.
     let c5 = (2. * Math.PI) / 4.5
-    let n1 = 7.5625
-    let d1 = 2.75
     function
     | Linear -> fun x -> x
     | EaseInSine -> fun x -> 1. - cos(x * Math.PI / 2.)

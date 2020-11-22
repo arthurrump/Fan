@@ -111,7 +111,7 @@ let render t =
     ctx |> Cloud.draw { Cloud.Size = 2. }
     ctx.restore ()
 
-runAnimation render
+// runAnimation render
 
 let tl2 = animationSingle <| timeline' (Alternate, Repeat 3) {
     100 => vars {
@@ -138,3 +138,49 @@ let scene =
         ctx.fill ()
 
 // runAnimation scene
+
+let gtl = animationSingle <| timeline' (Normal, Infinite) {
+    0 => vars {
+        "arrowDraw" => 0
+    }
+    1000 => vars {
+        "arrowDraw" => (1, EaseOutSine)
+    }
+    2000 => vars {
+        "arrowErase" => 0
+    }
+    3000 => vars {
+        "arrowErase" => (1, EaseInSine)
+    }
+    4000 => []
+}
+
+let grid t =
+    ctx.background ()
+    ctx.save ()
+
+    ctx.lineWidth <- 1.
+    ctx.strokeStyle <- rgba (0, 0, 0, 0.5)
+    for i in 0. .. 50. .. ctx.width do
+        ctx.beginPath ()
+        ctx.moveTo (i, 0.)
+        ctx.lineTo (i, ctx.height)
+        ctx.stroke ()
+    for i in 0. .. 50. .. ctx.height do
+        ctx.beginPath ()
+        ctx.moveTo (0., i)
+        ctx.lineTo (ctx.width, i)
+        ctx.stroke ()
+
+    ctx.lineWidth <- 3.
+    ctx.strokeStyle <- rgb (255, 100, 50)
+    ctx.fillStyle <- rgb (255, 0, 0)
+    ctx.arrow (100., 150., 400., 150., 50., gtl.["arrowDraw"] t, gtl.["arrowErase"] t)
+
+    ctx.beginPath ()
+    ctx.curve (100., 200., 400., 200., 50., gtl.["arrowDraw"] t, gtl.["arrowErase"] t)
+    ctx.stroke ()
+
+    ctx.restore()
+
+runAnimation grid
