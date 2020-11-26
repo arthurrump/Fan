@@ -321,14 +321,14 @@ let category = scene {
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
+
         ctx.arrow (490., 300., 250., 665., 100., tl.["ArrowVoidUnit"])
         ctx.arrow (560., 300., 800., 665., -100., tl.["ArrowVoidBool"])
         ctx.arrow (285., 690., 765., 690., -50., tl.["ArrowUnitBool"])
         ctx.arrow (285., 690., 765., 690., -100., tl.["ArrowUnitBool"])
         ctx.arrow (765., 710., 285., 710., -50., tl.["ArrowBoolUnit"])
 
-        // TODO: Create arc arrow
-        ctx.arrow (835., 710., 835., 685., 50., tl.["ArrowIdentity"])
+        ctx.arcArrow (835., 695., 25., 0.6 * Math.PI, (0.6 - 1.25 * tl.["ArrowIdentity"]) * Math.PI, true)
 
         ctx.restore ()
     )

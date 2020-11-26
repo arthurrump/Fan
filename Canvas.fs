@@ -105,6 +105,25 @@ type CanvasRenderingContext2D with
             ctx.stroke ()
             ctx.closePath ()
             ctx.restore ()
+    member ctx.arcArrow (cX, cY, radius, startAngle, endAngle, ?anticlockwise, ?headSize) =
+        if startAngle <> endAngle then
+            let anticlockwise = defaultArg anticlockwise false
+            let headSize = defaultArg headSize (10. + 2. * ctx.lineWidth)
+            let returnAngle = endAngle + 0.5 * Math.PI * if anticlockwise then -1. else 1.
+            let pi6 = Math.PI / 6.
+            let toX = cX + radius * cos(endAngle)
+            let toY = cY + radius * sin(endAngle)
+            ctx.save ()
+            ctx.beginPath ()
+            ctx.lineJoin <- "bevel"
+            ctx.arc (cX, cY, radius, startAngle, endAngle, anticlockwise)
+            ctx.moveTo (toX, toY)
+            ctx.lineTo (toX - headSize * cos(returnAngle - pi6), toY - headSize * sin(returnAngle - pi6))
+            ctx.moveTo (toX - headSize * cos(returnAngle + pi6), toY - headSize * sin(returnAngle + pi6))
+            ctx.lineTo (toX, toY)
+            ctx.stroke ()
+            ctx.closePath ()
+            ctx.restore ()
     member ctx.drawText (text : string, x, y, progressF : float -> float, t : float, ?duration) =
         let dashLen = 180.
         let duration = defaultArg duration (100. * float text.Length)
