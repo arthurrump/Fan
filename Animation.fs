@@ -248,6 +248,7 @@ let animationSingle (tl : Timeline<'t>) = animation.Yield (tl) |> animation.Run
 
 type IAnimationValueProvider<'t when 't : comparison> =
     abstract member Item : 't -> float
+    abstract member Function : 't -> (float -> float)
 
 type Scene<'t, 'r when 't : comparison> =
     { EnterAnimation : Animation<'t>
@@ -308,6 +309,9 @@ module Scene =
     let run scene r =
         let anim t = fun var -> scene.RunAnimation.[var] t
         let render t = 
-            let anim = anim t
-            scene.Render r ({ new IAnimationValueProvider<'t> with member __.Item (var) = anim var }) t
+            scene.Render r ({ 
+                new IAnimationValueProvider<'t> with 
+                    member __.Item (var) = anim t var
+                    member __.Function (var) = scene.RunAnimation.[var]
+            }) t
         runRender render

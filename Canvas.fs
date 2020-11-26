@@ -89,3 +89,23 @@ type CanvasRenderingContext2D with
             ctx.stroke ()
             ctx.closePath ()
             ctx.restore ()
+    member ctx.drawText (text : string, x, y, progressF : float -> float, t : float, ?duration) =
+        let dashLen = 180.
+        let duration = defaultArg duration (100. * float text.Length)
+        let delay = duration / float text.Length
+
+        for i in 0 .. text.Length - 1 do
+            ctx.save ()
+            let ch = string text.[i]
+            let x = x + ctx.measureText(text.[0..i-1]).width
+            let progress = progressF (t - float i * delay)
+            if progress < 1. then
+                ctx.globalAlpha <- 1. - (progress - 0.8) * 5.
+                ctx.setLineDash [| progress * dashLen; (1. - progress) * dashLen |]
+                ctx.strokeText(ch, x, y)
+
+            if progress > 0.6 then
+                ctx.globalAlpha <- (progress - 0.6) * 2.5
+                ctx.fillText(ch, x, y)
+
+            ctx.restore ()

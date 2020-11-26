@@ -206,4 +206,29 @@ let arrow = scene {
     )
 }
 
-Scene.run square ctx
+let text = scene {
+    run (timeline' (Alternate, Infinite) {
+        1000 => vars {
+            "progress" => 0
+        }
+        2000 => vars {
+            "progress" => 1
+        }
+        3000 => []
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.background (rgb (0, 0, 0))
+        ctx.save ()
+        
+        ctx.font <- "208px 'CMU Serif', serif"
+        ctx.strokeStyle <- color "#fff"
+        ctx.fillStyle <- color "#fff"
+        ctx.textBaseline <- "middle"
+        let textX = (ctx.width - ctx.measureText("Hello, world!").width) / 2.
+        ctx.drawText ("Hello, world!", textX, ctx.height / 2., tl.Function "progress", t, 1000.)
+
+        ctx.restore ()
+    )
+}
+
+Scene.run text ctx
