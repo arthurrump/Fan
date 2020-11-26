@@ -206,6 +206,28 @@ let arrow = scene {
     )
 }
 
+module CodeColors =
+    // Based on VS Code DarkVS and Dark+ themes
+    let text = color "#D4D4D4"
+    let comment = color "#6A9955"
+    let funcDecl = color "#DCDCAA"
+    let typeDecl = color "#4EC980"
+    let keyword = color "#569cd6"
+    let control = color "#C586C0"
+    let operator = color "#D4D4D4"
+    let var = color "#9CDCFE"
+    let const' = color "#4FC1FF"
+    let stringLit = color "#CE9178"
+    let customLit = color "#DCDCAA"
+    let numberLit = color "#B5CEA8"
+    let xmlBracket = color "#808080"
+
+open CodeColors
+
+let serifFont size = sprintf "%ipx 'CMU Serif', serif" size
+let mathFont size = sprintf "%ipx 'CMU Serif', math" size
+let codeFont size = sprintf "%ipx Consolas, monospace" size
+
 let text = scene {
     run (timeline' (Alternate, Infinite) {
         1000 => vars {
@@ -219,12 +241,15 @@ let text = scene {
     render (fun (ctx : CanvasRenderingContext2D) tl t ->
         ctx.background (rgb (0, 0, 0))
         ctx.save ()
+
+        let text = 
+            [ [ (funcDecl, "id"); (operator, " :: "); (var, "a"); (operator, " -> "); (var, "a") ]
+              [ (text, "id "); (text, "x"); (text, " = "); (text, "x") ] ]
         
-        ctx.font <- "208px 'CMU Serif', serif"
+        ctx.font <- codeFont 200
         ctx.setStyle (color "#fff")
-        ctx.textBaseline <- "middle"
-        let textX = (ctx.width - ctx.measureText("Hello, world!").width) / 2.
-        ctx.drawText ("Hello, world!", textX, ctx.height / 2., tl.Function "progress", t, 1000.)
+        ctx.textBaseline <- "top"
+        ctx.drawLongText (text, 100., (ctx.height - float text.Length * ctx.currentLineHeight * 1.2) / 2., tl.Function "progress", t)
 
         ctx.restore ()
     )

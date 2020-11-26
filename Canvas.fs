@@ -2,11 +2,17 @@ module Canvas
 
 open System
 open Fable.Core
+open Fable.Core.JsInterop
 open Browser.Types
 
-let inline rgb (r, g, b) = U3.Case1 (sprintf "rgb(%f, %f, %f)" (float r) (float g) (float b))
-let inline rgba (r, g, b, a) = U3.Case1 (sprintf "rgba(%f, %f, %f, %f)" (float r) (float g) (float b) a)
-let inline color (str : string) = U3.Case1 str
+type Style = U3<string,CanvasGradient,CanvasPattern>
+
+let inline rgb (r, g, b) : Style = 
+    U3.Case1 (sprintf "rgb(%f, %f, %f)" (float r) (float g) (float b))
+let inline rgba (r, g, b, a) : Style = 
+    U3.Case1 (sprintf "rgba(%f, %f, %f, %f)" (float r) (float g) (float b) a)
+let inline color (str : string) : Style = 
+    U3.Case1 str
 
 let private quadraticControlPoint fromX fromY toX toY cpDist =
     let center = fromX + (toX - fromX) / 2., fromY + (toY - fromY) / 2.
@@ -40,6 +46,13 @@ let private quadraticProgressPoints fromX fromY cX cY toX toY progressStart prog
         let nCX = lerp (lerp fromX cX progressStart) (lerp cX toX progressStart) progressEnd
         let nCY = lerp (lerp fromY cY progressStart) (lerp cY toY progressStart) progressEnd
         (nFromX, nFromY, nCX, nCY, nToX, nToY)
+
+type ExtendedTextMetrics =
+    inherit TextMetrics
+    abstract actualBoundingBoxAscent : float with get, set
+    abstract actualBoundingBoxDescent : float with get, set
+    abstract fontBoundingBoxAscent : float with get, set
+    abstract fontBoundingBoxDescent : float with get, set
 
 type CanvasRenderingContext2D with
     member ctx.width = ctx.canvas.width
@@ -98,17 +111,43 @@ type CanvasRenderingContext2D with
         let delay = duration / float text.Length
 
         for i in 0 .. text.Length - 1 do
-            ctx.save ()
             let ch = string text.[i]
             let x = x + ctx.measureText(text.[0..i-1]).width
             let progress = progressF (t - float i * delay)
+            ctx.save ()
             if progress < 1. then
                 ctx.globalAlpha <- 1. - (progress - 0.8) * 5.
                 ctx.setLineDash [| progress * dashLen; (1. - progress) * dashLen |]
                 ctx.strokeText(ch, x, y)
-
             if progress > 0.6 then
                 ctx.globalAlpha <- (progress - 0.6) * 2.5
                 ctx.fillText(ch, x, y)
-
             ctx.restore ()
+    member ctx.currentLineHeight with get () = 
+        let longText = String [|'0'..'z'|]
+        let m = ctx.measureText(longText) :?> ExtendedTextMetrics
+        if not (isNullOrUndefined m.fontBoundingBoxAscent) 
+        then m.fontBoundingBoxAscent + m.fontBoundingBoxDescent
+        elif not (isNullOrUndefined m.actualBoundingBoxAscent)
+        then m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
+        else ctx.measureText("GMX").width / 3.
+    member ctx.drawLongText (text : (Style * string) list list, x, y, progressF : float -> float, t : float, ?lineHeight, ?duration) = 
+        let lineHeight = (defaultArg lineHeight 1.2) * ctx.currentLineHeight
+        let charCount = text |> List.map (List.map (snd >> String.length))
+        let totalChars = charCount |> List.map List.sum |> List.sum
+        let duration = defaultArg duration (50. * float totalChars)
+        let delay = duration / float totalChars
+        for li, line in text |> List.indexed do
+            let y = y + float li * lineHeight
+            let textSizes = line |> List.map (fun (_, str) -> ctx.measureText(str).width)
+            let lineDelay = delay * float (charCount.[0..li-1] |> List.map List.sum |> List.sum)
+            for i in 0 .. line.Length - 1 do
+                let (style, text) = line.[i]
+                let x = x + (textSizes.[0..i-1] |> List.sum)
+                let delay = delay * float (charCount.[li].[0..i-1] |> List.sum)
+                ctx.save ()
+                ctx.setStyle (style)
+                ctx.drawText (text, x, y, progressF, t - lineDelay - delay, delay * float text.Length)
+                ctx.restore ()
+    member ctx.drawLongText (text : (Style * string) list list, x, y, ?lineHeight) =
+        ctx.drawLongText (text, x, y, (fun _ -> 1.), 1., ?lineHeight = lineHeight)
