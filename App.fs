@@ -221,8 +221,7 @@ let text = scene {
         ctx.save ()
         
         ctx.font <- "208px 'CMU Serif', serif"
-        ctx.strokeStyle <- color "#fff"
-        ctx.fillStyle <- color "#fff"
+        ctx.setStyle (color "#fff")
         ctx.textBaseline <- "middle"
         let textX = (ctx.width - ctx.measureText("Hello, world!").width) / 2.
         ctx.drawText ("Hello, world!", textX, ctx.height / 2., tl.Function "progress", t, 1000.)

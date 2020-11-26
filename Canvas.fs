@@ -44,6 +44,9 @@ let private quadraticProgressPoints fromX fromY cX cY toX toY progressStart prog
 type CanvasRenderingContext2D with
     member ctx.width = ctx.canvas.width
     member ctx.height = ctx.canvas.height
+    member ctx.setStyle (style) =
+        ctx.strokeStyle <- style
+        ctx.fillStyle <- style
     member ctx.background (?color) =
         let color = defaultArg color (rgb (255, 255, 255))
         let prevFill = ctx.fillStyle
