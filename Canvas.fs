@@ -87,8 +87,8 @@ type CanvasRenderingContext2D with
     member ctx.arrow (fromX, fromY, toX, toY, ?cpDist, ?progressStart, ?progressEnd, ?headSize) =
         let cpDist = defaultArg cpDist 0.
         let headSize = defaultArg headSize (10. + 2. * ctx.lineWidth)
-        let progressStart = defaultArg progressStart 0.
-        let progressEnd = defaultArg progressEnd 1.
+        let progressStart = defaultArg progressStart 1.
+        let progressEnd = defaultArg progressEnd 0.
         if progressStart <> progressEnd then
             let (cX, cY) = quadraticControlPoint fromX fromY toX toY cpDist
             let (fromX, fromY, cX, cY, toX, toY) = quadraticProgressPoints fromX fromY cX cY toX toY progressStart progressEnd

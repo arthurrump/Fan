@@ -147,6 +147,22 @@ let square = scene {
     )
 }
 
+let grid size style (ctx : CanvasRenderingContext2D) =
+    ctx.save ()
+    ctx.lineWidth <- 1.
+    ctx.strokeStyle <- style
+    for i in 0. .. size .. ctx.width do
+        ctx.beginPath ()
+        ctx.moveTo (i, 0.)
+        ctx.lineTo (i, ctx.height)
+        ctx.stroke ()
+    for i in 0. .. size .. ctx.height do
+        ctx.beginPath ()
+        ctx.moveTo (0., i)
+        ctx.lineTo (ctx.width, i)
+        ctx.stroke ()
+    ctx.restore ()
+
 let arrow = scene {
     enter (timeline {
         0 => vars {
@@ -180,18 +196,7 @@ let arrow = scene {
         ctx.save ()
         ctx.translate (10., 10.)
 
-        ctx.lineWidth <- 1.
-        ctx.strokeStyle <- rgba (150, 150, 150, tl.["gridOpacity"])
-        for i in 0. .. 50. .. ctx.width do
-            ctx.beginPath ()
-            ctx.moveTo (i, -10.)
-            ctx.lineTo (i, ctx.height)
-            ctx.stroke ()
-        for i in 0. .. 50. .. ctx.height do
-            ctx.beginPath ()
-            ctx.moveTo (-10., i)
-            ctx.lineTo (ctx.width, i)
-            ctx.stroke ()
+        ctx |> grid 50. (rgba (150, 150, 150, tl.["gridOpacity"]))
 
         ctx.lineWidth <- 3.
         ctx.strokeStyle <- rgb (255, 100, 50)
@@ -255,4 +260,78 @@ let text = scene {
     )
 }
 
-Scene.run text ctx
+let inline fadeIn duration easing property = timeline {
+    0 => vars { property => 0. }
+    (float duration) => vars { property => (1., easing) }
+}
+
+type TextAlign = 
+    | LeftAbove | CenterAbove | RightAbove
+    | Left                    | Right
+    | LeftUnder | CenterUnder | RightUnder
+
+let node name x y align opacityF t (ctx : CanvasRenderingContext2D) =
+    ctx.save ()
+    ctx.strokeStyle <- color "#fff"
+    ctx.fillStyle <- rgba (255, 255, 255, opacityF t)
+    ctx.beginPath ()
+    ctx.ellipse (x, y, 25., endAngle = opacityF t * 2. * Math.PI)
+    ctx.stroke ()
+    ctx.beginPath ()
+    ctx.ellipse (x, y, 25.)
+    ctx.fill ()
+
+    ctx.setStyle (color "#fff")
+    ctx.font <- mathFont 74
+    let (textX, textY, baseline) =
+        let width = ctx.measureText(name).width
+        match align with
+        | LeftAbove -> (x - width, y - 35., "bottom")
+        | CenterAbove -> (x - width / 2., y - 35., "bottom")
+        | RightAbove -> (x, y - 35., "bottom")
+        | Left -> (x - width - 35., y, "middle")
+        | Right -> (x + 35., y, "middle")
+        | LeftUnder -> (x - width, y + 35., "top")
+        | CenterUnder -> (x - width / 2., y + 35., "top")
+        | RightUnder -> (x, y + 35., "top")
+    ctx.textBaseline <- baseline
+    ctx.drawText (name, textX, textY, opacityF, t, 0.)
+    ctx.restore ()
+
+let category = scene {
+    run (animation {
+        fadeIn 1000 Linear "ObjectVoid"
+        fadeIn 1000 Linear "ObjectUnit"
+        fadeIn 1000 Linear "ObjectBool"
+        1000 => fadeIn 1000 EaseOutQuad "ArrowVoidUnit"
+        1000 => fadeIn 1000 EaseOutQuad "ArrowVoidBool"
+        2000 => fadeIn 1000 EaseOutQuad "ArrowUnitBool"
+        3000 => fadeIn 1000 EaseOutQuad "ArrowBoolUnit"
+        4000 => fadeIn 1000 EaseOutQuad "ArrowIdentity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.background (color "#000")
+        ctx.save ()
+
+        // ctx |> grid 100. (color "#eee")
+
+        ctx |> node "Unit" 250. 700. LeftUnder (tl.Function "ObjectUnit") t
+        ctx |> node "Bool" 800. 700. RightUnder (tl.Function "ObjectBool") t
+        ctx |> node "Void" 525. 300. CenterAbove (tl.Function "ObjectVoid") t
+
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+        ctx.arrow (490., 300., 250., 665., 100., tl.["ArrowVoidUnit"])
+        ctx.arrow (560., 300., 800., 665., -100., tl.["ArrowVoidBool"])
+        ctx.arrow (285., 690., 765., 690., -50., tl.["ArrowUnitBool"])
+        ctx.arrow (285., 690., 765., 690., -100., tl.["ArrowUnitBool"])
+        ctx.arrow (765., 710., 285., 710., -50., tl.["ArrowBoolUnit"])
+
+        // TODO: Create arc arrow
+        ctx.arrow (835., 710., 835., 685., 50., tl.["ArrowIdentity"])
+
+        ctx.restore ()
+    )
+}
+
+Scene.run category ctx
