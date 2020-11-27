@@ -236,10 +236,14 @@ type AnimationBuilder<'t when 't : comparison>() =
         this.Yield ((float delay, timeline))
     member __.Yield (timeline : Timeline<'t>) =
         [ timeline ]
+    member __.YieldFrom (timelines : #seq<Timeline<'t>>) =
+        timelines |> Seq.toList
     member __.Delay (f) =
         f()
     member __.Combine (t1 : Timeline<'t> list, t2) =
         t1 @ t2
+    member this.For (i : 'a seq, f : 'a -> Timeline<'t> list) =
+        i |> Seq.collect f |> this.YieldFrom
     member __.Run (timelines : Timeline<'t> list) =
         Animation (timelines)
 
@@ -306,7 +310,7 @@ module Scene =
             window.requestAnimationFrame (run render) |> ignore
         window.requestAnimationFrame (run render) |> ignore
        
-    let run scene r =
+    let run r scene =
         let anim t = fun var -> scene.RunAnimation.[var] t
         let render t = 
             scene.Render r ({ 
@@ -315,3 +319,6 @@ module Scene =
                     member __.Function (var) = scene.RunAnimation.[var]
             }) t
         runRender render
+
+    let withRender render scene =
+        { scene with Render = fun r tl t -> render r tl t scene.Render }

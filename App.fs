@@ -233,7 +233,7 @@ let serifFont size = sprintf "%ipx 'CMU Serif', serif" size
 let mathFont size = sprintf "%ipx 'CMU Serif', math" size
 let codeFont size = sprintf "%ipx Consolas, monospace" size
 
-let text = scene {
+let helloWorld = scene {
     run (timeline' (Alternate, Infinite) {
         1000 => vars {
             "progress" => 0
@@ -334,4 +334,211 @@ let category = scene {
     )
 }
 
-Scene.run category ctx
+let inline fromTo from to' duration easing property = timeline {
+    0 => vars { property => (float from) }
+    (float duration) => vars { property => (float to', easing) }
+}
+
+let inline flyInBottom toY duration property = 
+    fromTo ctx.height toY duration EaseOutQuad property
+
+let types = scene {
+    run (animation {
+        0 => flyInBottom 200. 1000 "bool"
+        0 => flyInBottom 350. 1000 "int"
+        0 => flyInBottom 600. 1000 "string"
+        0 => flyInBottom 500. 1000 "char"
+        0 => flyInBottom 250. 1000 "float"
+        0 => flyInBottom 800. 1000 "double"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.fillStyle <- typeDecl
+        ctx.font <- codeFont 100
+        ctx.textBaseline <- "top"
+
+        ctx.fillText ("bool", 100., tl.["bool"])
+        ctx.fillText ("int", 350., tl.["int"])
+        ctx.fillText ("string", 200., tl.["string"])
+        ctx.fillText ("char", 1350., tl.["char"])
+        ctx.fillText ("float", 1400., tl.["float"])
+        ctx.fillText ("double", 1300., tl.["double"])
+    )
+}
+
+let boolSet = scene {
+    run (animation {
+        0 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
+        500 => fadeIn 1000 Linear "values"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.fillStyle <- typeDecl
+        ctx.font <- codeFont 100
+        ctx.textBaseline <- "top"
+
+        ctx.fillText ("bool", 100., 200.)
+
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+
+        ctx.beginPath ()
+        ctx.ellipse (400., 600., 300., endAngle = tl.["circle"], rotation = -0.5*Math.PI)
+        ctx.stroke ()
+
+        ctx.lineWidth <- 1.
+        ctx.setStyle keyword
+        ctx.drawText ("true", 210., 450., tl.Function "values", t)
+        ctx.drawText ("false", 350., 650., tl.Function "values", t)
+    )
+}
+
+let intSet = scene {
+    run (animation {
+        0 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
+        500 => fadeIn 1000 Linear "values"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.fillStyle <- typeDecl
+        ctx.font <- codeFont 100
+        ctx.textBaseline <- "top"
+
+        ctx.fillText ("int", 100., 200.)
+
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+
+        ctx.beginPath ()
+        ctx.ellipse (400., 600., 300., endAngle = tl.["circle"], rotation = -0.5*Math.PI)
+        ctx.stroke ()
+
+        ctx.lineWidth <- 1.
+        ctx.setStyle numberLit
+        ctx.drawText ("1", 210., 450., tl.Function "values", t)
+        ctx.drawText ("-48", 140., 580., tl.Function "values", t)
+        ctx.drawText ("3", 360., 510., tl.Function "values", t)
+        ctx.drawText ("7", 550., 530., tl.Function "values", t)
+        ctx.drawText ("-9", 400., 350., tl.Function "values", t)
+        ctx.drawText ("512", 390., 630., tl.Function "values", t)
+        ctx.drawText ("-348", 300., 750., tl.Function "values", t)
+    )
+}
+
+let intRange = scene {
+    run (animation {
+        fadeIn 1000 Linear "range"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.fillStyle <- typeDecl
+        ctx.font <- codeFont 100
+        ctx.textBaseline <- "top"
+
+        ctx.fillText ("int", 100., 200.)
+
+        ctx.drawLongText ([
+            [ (operator, "[ "); (numberLit, "−2147483648") ] 
+            [ (operator, " .. "); (numberLit, "2147483647"); (operator, " ]") ]
+        ], 110., 350., tl.Function "range", t, duration = 500.)
+    )
+}
+
+let stringSet = scene {
+    run (animation {
+        1750 => fromTo 0. -2500. 6000 Linear "shiftUp"
+        for i in 0 .. 32 do
+            let var = (sprintf "str%i" i)
+            (float i * 250.) => timeline {
+                0 => vars { var => 0 }
+                500 => vars { var => 1 }
+                4000 => vars { var => 1 }
+                4500 => vars { var => 0 }
+            }
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.translate (0., tl.["shiftUp"])
+
+        ctx.fillStyle <- typeDecl
+        ctx.font <- codeFont 100
+        ctx.textBaseline <- "top"
+
+        ctx.fillText ("string", 100., 200.)
+        
+        ctx.setStyle stringLit
+
+        for i in 0 .. 32 do
+            let str = sprintf "\"%s\"" (String.replicate i "a")
+            ctx.drawText (str, 110., 310. + float i * 100., tl.Function (sprintf "str%i" i), t, 100.)
+    )
+}
+
+let unitSet = scene {
+    run (animation {
+        0 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
+        500 => fadeIn 1000 Linear "values"
+        2000 => fadeIn 1000 Linear "void"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.fillStyle <- typeDecl
+        ctx.font <- codeFont 100
+        ctx.textBaseline <- "top"
+
+        ctx.fillText ("unit", 100., 200.)
+        
+        ctx.drawLongText ([ [ (text, "("); (keyword, "void"); (text, ")") ] ], 500., 200., tl.Function "void", t)
+
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+
+        ctx.beginPath ()
+        ctx.ellipse (400., 600., 300., endAngle = tl.["circle"], rotation = -0.5*Math.PI)
+        ctx.stroke ()
+
+        ctx.lineWidth <- 1.
+        ctx.setStyle operator
+        ctx.textBaseline <- "middle"
+        let x = 400. - ctx.measureText("()").width / 2.
+        ctx.drawText ("()", x, 600., tl.Function "values", t)
+    )
+}
+
+let voidIsUnit = scene {
+    run (animation {
+        0 => fadeIn 1000 Linear "code"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.font <- codeFont 70
+        ctx.textBaseline <- "top"
+        ctx.drawLongText([
+            [ (keyword, "void "); (funcDecl, "Ignore"); (operator, "<"); (typeDecl, "T"); (operator, ">(")
+              (typeDecl, "T "); (var, "value"); (operator, ")") ]
+            [ (operator, "{") ]
+            [ (keyword, "  "); (control, "return"); (operator, ";") ]
+            [ (operator, "}") ]
+        ], 100., 100., tl.Function "code", t)
+
+        ctx.drawLongText([
+            [ (keyword, "public sealed class "); (typeDecl, "Unit") ] 
+            [ (operator, "{") ]
+            [ (keyword, "  public static "); (typeDecl, "Unit "); (var, "Instance"); (operator, " = "); 
+              (keyword, "new "); (typeDecl, "Unit"); (operator, "();") ]
+            [ (keyword, "  private "); (funcDecl, "Unit"); (operator, "() { }") ]
+            [ (operator, "}") ]
+        ], 100., 450., tl.Function "code", t)
+
+        ctx.drawLongText([
+            [ (typeDecl, "Unit "); (funcDecl, "Ignore"); (operator, "<"); (typeDecl, "T"); (operator, ">(")
+              (typeDecl, "T "); (var, "value"); (operator, ")") ]
+            [ (operator, "{") ]
+            [ (keyword, "  "); (control, "return "); (var, "Unit"); (operator, "."); (var, "Instance"); (operator, ";") ]
+            [ (operator, "}") ]
+        ], 100., 800., tl.Function "code", t)
+    )
+}
+
+voidIsUnit 
+|> Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
+    ctx.background (color "#000")
+    ctx.save ()
+    // ctx |> grid 100. (color "#eee")
+    render ctx tl t
+    ctx.restore ()
+)
+|> Scene.run ctx
