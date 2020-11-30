@@ -47,6 +47,13 @@ let private quadraticProgressPoints fromX fromY cX cY toX toY progressStart prog
         let nCY = lerp (lerp fromY cY progressStart) (lerp cY toY progressStart) progressEnd
         (nFromX, nFromY, nCX, nCY, nToX, nToY)
 
+let private limit bottom top = max bottom >> min top
+
+let private staggeredProgress stagger length index progress = 
+    if length >= 2
+    then limit 0. 1. ((stagger + 1.) * progress - (float index * stagger / float (length - 1)))
+    else progress
+
 type ExtendedTextMetrics =
     inherit TextMetrics
     abstract actualBoundingBoxAscent : float with get, set
@@ -124,15 +131,12 @@ type CanvasRenderingContext2D with
             ctx.stroke ()
             ctx.closePath ()
             ctx.restore ()
-    member ctx.drawText (text : string, x, y, progressF : float -> float, t : float, ?duration) =
+    member ctx.drawText (textProgress : (char * float) seq, x, y) =
         let dashLen = 180.
-        let duration = defaultArg duration (100. * float text.Length)
-        let delay = duration / float text.Length
-
-        for i in 0 .. text.Length - 1 do
-            let ch = string text.[i]
+        let text = textProgress |> Seq.map fst |> Seq.toArray |> String
+        for (i, (ch, progress)) in textProgress |> Seq.indexed do
+            let ch = string ch
             let x = x + ctx.measureText(text.[0..i-1]).width
-            let progress = progressF (t - float i * delay)
             ctx.save ()
             if progress < 1. then
                 ctx.globalAlpha <- 1. - (progress - 0.8) * 5.
@@ -142,6 +146,13 @@ type CanvasRenderingContext2D with
                 ctx.globalAlpha <- (progress - 0.6) * 2.5
                 ctx.fillText(ch, x, y)
             ctx.restore ()
+    member ctx.drawText (text : string, x, y, progress, ?stagger) =
+        let stagger = defaultArg stagger 0.5
+        let textProgress =
+            text
+            |> Seq.indexed
+            |> Seq.map (fun (i, ch) -> ch, staggeredProgress stagger text.Length i progress)
+        ctx.drawText (textProgress, x, y)
     member ctx.currentLineHeight with get () = 
         let longText = String [|'0'..'z'|]
         let m = ctx.measureText(longText) :?> ExtendedTextMetrics
@@ -150,23 +161,26 @@ type CanvasRenderingContext2D with
         elif not (isNullOrUndefined m.actualBoundingBoxAscent)
         then m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
         else ctx.measureText("GMX").width / 3.
-    member ctx.drawLongText (text : (Style * string) list list, x, y, progressF : float -> float, t : float, ?lineHeight, ?duration) = 
+    member ctx.drawLongText (text : (Style * string) list list, x, y, ?progress, ?stagger, ?lineHeight) = 
+        let progress = defaultArg progress 1.
+        let stagger = defaultArg stagger 0.5
         let lineHeight = (defaultArg lineHeight 1.2) * ctx.currentLineHeight
-        let charCount = text |> List.map (List.map (snd >> String.length))
-        let totalChars = charCount |> List.map List.sum |> List.sum
-        let duration = defaultArg duration (50. * float totalChars)
-        let delay = duration / float totalChars
+        let charCountPerBlock = text |> List.map (List.map (snd >> String.length))
+        let charCountPerLine = charCountPerBlock |> List.map List.sum
+        let charCountTotal = charCountPerLine |> List.sum
         for li, line in text |> List.indexed do
             let y = y + float li * lineHeight
             let textSizes = line |> List.map (fun (_, str) -> ctx.measureText(str).width)
-            let lineDelay = delay * float (charCount.[0..li-1] |> List.map List.sum |> List.sum)
+            let lineStartIndex = charCountPerLine.[0..li-1] |> List.sum
             for i in 0 .. line.Length - 1 do
                 let (style, text) = line.[i]
                 let x = x + (textSizes.[0..i-1] |> List.sum)
-                let delay = delay * float (charCount.[li].[0..i-1] |> List.sum)
+                let blockStartIndex = lineStartIndex + (charCountPerBlock.[li].[0..i-1] |> List.sum)
+                let textProgress =
+                    text
+                    |> Seq.indexed
+                    |> Seq.map (fun (i, ch) -> ch, staggeredProgress stagger charCountTotal (blockStartIndex + i) progress)
                 ctx.save ()
                 ctx.setStyle (style)
-                ctx.drawText (text, x, y, progressF, t - lineDelay - delay, delay * float text.Length)
+                ctx.drawText (textProgress, x, y)
                 ctx.restore ()
-    member ctx.drawLongText (text : (Style * string) list list, x, y, ?lineHeight) =
-        ctx.drawLongText (text, x, y, (fun _ -> 1.), 1., ?lineHeight = lineHeight)

@@ -244,6 +244,26 @@ let helloWorld = scene {
         3000 => []
     })
     render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.font <- serifFont 200
+        ctx.setStyle (color "#fff")
+        ctx.textBaseline <- "middle"
+
+        let x = (ctx.width - ctx.measureText("Hello, world!").width) / 2.
+        ctx.drawText ("Hello, world!", x, ctx.height / 2., tl.["progress"], 0.5)
+    )
+}
+
+let haskell = scene {
+    run (timeline' (Alternate, Infinite) {
+        1000 => vars {
+            "progress" => 0
+        }
+        2000 => vars {
+            "progress" => 1
+        }
+        3000 => []
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
         ctx.background (rgb (0, 0, 0))
         ctx.save ()
 
@@ -254,7 +274,7 @@ let helloWorld = scene {
         ctx.font <- codeFont 200
         ctx.setStyle (color "#fff")
         ctx.textBaseline <- "top"
-        ctx.drawLongText (text, 100., (ctx.height - float text.Length * ctx.currentLineHeight * 1.2) / 2., tl.Function "progress", t)
+        ctx.drawLongText (text, 100., (ctx.height - float text.Length * ctx.currentLineHeight * 1.2) / 2., tl.["progress"])
 
         ctx.restore ()
     )
@@ -270,12 +290,12 @@ type TextAlign =
     | Left                    | Right
     | LeftUnder | CenterUnder | RightUnder
 
-let node name x y align opacityF t (ctx : CanvasRenderingContext2D) =
+let node name x y align opacity (ctx : CanvasRenderingContext2D) =
     ctx.save ()
     ctx.strokeStyle <- color "#fff"
-    ctx.fillStyle <- rgba (255, 255, 255, opacityF t)
+    ctx.fillStyle <- rgba (255, 255, 255, opacity)
     ctx.beginPath ()
-    ctx.ellipse (x, y, 25., endAngle = opacityF t * 2. * Math.PI)
+    ctx.ellipse (x, y, 25., endAngle = opacity * 2. * Math.PI)
     ctx.stroke ()
     ctx.beginPath ()
     ctx.ellipse (x, y, 25.)
@@ -295,7 +315,7 @@ let node name x y align opacityF t (ctx : CanvasRenderingContext2D) =
         | CenterUnder -> (x - width / 2., y + 35., "top")
         | RightUnder -> (x, y + 35., "top")
     ctx.textBaseline <- baseline
-    ctx.drawText (name, textX, textY, opacityF, t, 0.)
+    ctx.drawText (name, textX, textY, opacity)
     ctx.restore ()
 
 let category = scene {
@@ -315,9 +335,9 @@ let category = scene {
 
         // ctx |> grid 100. (color "#eee")
 
-        ctx |> node "Unit" 250. 700. LeftUnder (tl.Function "ObjectUnit") t
-        ctx |> node "Bool" 800. 700. RightUnder (tl.Function "ObjectBool") t
-        ctx |> node "Void" 525. 300. CenterAbove (tl.Function "ObjectVoid") t
+        ctx |> node "Unit" 250. 700. LeftUnder tl.["ObjectUnit"]
+        ctx |> node "Bool" 800. 700. RightUnder tl.["ObjectBool"]
+        ctx |> node "Void" 525. 300. CenterAbove tl.["ObjectVoid"]
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
@@ -386,8 +406,8 @@ let boolSet = scene {
 
         ctx.lineWidth <- 1.
         ctx.setStyle keyword
-        ctx.drawText ("true", 210., 450., tl.Function "values", t)
-        ctx.drawText ("false", 350., 650., tl.Function "values", t)
+        ctx.drawText ("true", 210., 450., tl.["values"])
+        ctx.drawText ("false", 350., 650., tl.["values"])
     )
 }
 
@@ -412,13 +432,13 @@ let intSet = scene {
 
         ctx.lineWidth <- 1.
         ctx.setStyle numberLit
-        ctx.drawText ("1", 210., 450., tl.Function "values", t)
-        ctx.drawText ("-48", 140., 580., tl.Function "values", t)
-        ctx.drawText ("3", 360., 510., tl.Function "values", t)
-        ctx.drawText ("7", 550., 530., tl.Function "values", t)
-        ctx.drawText ("-9", 400., 350., tl.Function "values", t)
-        ctx.drawText ("512", 390., 630., tl.Function "values", t)
-        ctx.drawText ("-348", 300., 750., tl.Function "values", t)
+        ctx.drawText ("1", 210., 450., tl.["values"])
+        ctx.drawText ("-48", 140., 580., tl.["values"])
+        ctx.drawText ("3", 360., 510., tl.["values"])
+        ctx.drawText ("7", 550., 530., tl.["values"])
+        ctx.drawText ("-9", 400., 350., tl.["values"])
+        ctx.drawText ("512", 390., 630., tl.["values"])
+        ctx.drawText ("-348", 300., 750., tl.["values"])
     )
 }
 
@@ -436,7 +456,7 @@ let intRange = scene {
         ctx.drawLongText ([
             [ (operator, "[ "); (numberLit, "−2147483648") ] 
             [ (operator, " .. "); (numberLit, "2147483647"); (operator, " ]") ]
-        ], 110., 350., tl.Function "range", t, duration = 500.)
+        ], 110., 350., tl.["range"])
     )
 }
 
@@ -465,7 +485,7 @@ let stringSet = scene {
 
         for i in 0 .. 32 do
             let str = sprintf "\"%s\"" (String.replicate i "a")
-            ctx.drawText (str, 110., 310. + float i * 100., tl.Function (sprintf "str%i" i), t, 100.)
+            ctx.drawText (str, 110., 310. + float i * 100., tl.[(sprintf "str%i" i)])
     )
 }
 
@@ -482,7 +502,7 @@ let unitSet = scene {
 
         ctx.fillText ("unit", 100., 200.)
         
-        ctx.drawLongText ([ [ (text, "("); (keyword, "void"); (text, ")") ] ], 500., 200., tl.Function "void", t)
+        ctx.drawLongText ([ [ (text, "("); (keyword, "void"); (text, ")") ] ], 500., 200., tl.["void"])
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
@@ -495,7 +515,7 @@ let unitSet = scene {
         ctx.setStyle operator
         ctx.textBaseline <- "middle"
         let x = 400. - ctx.measureText("()").width / 2.
-        ctx.drawText ("()", x, 600., tl.Function "values", t)
+        ctx.drawText ("()", x, 600., tl.["values"])
     )
 }
 
@@ -512,7 +532,7 @@ let voidIsUnit = scene {
             [ (operator, "{") ]
             [ (keyword, "  "); (control, "return"); (operator, ";") ]
             [ (operator, "}") ]
-        ], 100., 100., tl.Function "code", t)
+        ], 100., 100., tl.["code"])
 
         ctx.drawLongText([
             [ (keyword, "public sealed class "); (typeDecl, "Unit") ] 
@@ -521,7 +541,7 @@ let voidIsUnit = scene {
               (keyword, "new "); (typeDecl, "Unit"); (operator, "();") ]
             [ (keyword, "  private "); (funcDecl, "Unit"); (operator, "() { }") ]
             [ (operator, "}") ]
-        ], 100., 450., tl.Function "code", t)
+        ], 100., 450., tl.["code"])
 
         ctx.drawLongText([
             [ (typeDecl, "Unit "); (funcDecl, "Ignore"); (operator, "<"); (typeDecl, "T"); (operator, ">(")
@@ -529,11 +549,11 @@ let voidIsUnit = scene {
             [ (operator, "{") ]
             [ (keyword, "  "); (control, "return "); (var, "Unit"); (operator, "."); (var, "Instance"); (operator, ";") ]
             [ (operator, "}") ]
-        ], 100., 800., tl.Function "code", t)
+        ], 100., 800., tl.["code"])
     )
 }
 
-voidIsUnit 
+haskell 
 |> Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.background (color "#000")
     ctx.save ()
