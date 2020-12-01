@@ -362,6 +362,15 @@ let inline fromTo from to' duration easing property = timeline {
 let inline flyInBottom toY duration property = 
     fromTo ctx.height toY duration EaseOutQuad property
 
+let drawLanguageIndicator lang progress (ctx : CanvasRenderingContext2D) =
+    ctx.save ()
+    ctx.setStyle (color "#fff")
+    ctx.lineWidth <- 1.
+    ctx.font <- serifFont 60
+    ctx.textBaseline <- "bottom"
+    ctx.drawText (lang, 50., ctx.height - 50., progress)
+    ctx.restore ()
+
 let types = scene {
     run (animation {
         0 => flyInBottom 200. 1000 "bool"
@@ -500,7 +509,7 @@ let unitSet = scene {
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("unit", 100., 200.)
+        ctx.fillText ("Unit", 100., 200.)
         
         ctx.drawLongText ([ [ (text, "("); (keyword, "void"); (text, ")") ] ], 500., 200., tl.["void"])
 
@@ -550,6 +559,46 @@ let voidIsUnit = scene {
             [ (keyword, "  "); (control, "return "); (var, "Unit"); (operator, "."); (var, "Instance"); (operator, ";") ]
             [ (operator, "}") ]
         ], 100., 800., tl.["code"])
+
+        ctx |> drawLanguageIndicator "C#" tl.["code"]
+    )
+}
+
+let voidSet = scene {
+    run (animation {
+        0 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+        ctx.fillStyle <- typeDecl
+        ctx.font <- codeFont 100
+        ctx.textBaseline <- "top"
+
+        ctx.fillText ("Void", 100., 200.)
+        
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+
+        ctx.beginPath ()
+        ctx.ellipse (400., 600., 300., endAngle = tl.["circle"], rotation = -0.5*Math.PI)
+        ctx.stroke ()
+    )
+}
+
+let voidOO = scene {
+    run (animation {
+        0 => fadeIn 1000 Linear "code"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.font <- codeFont 70
+        ctx.textBaseline <- "top"
+        ctx.drawLongText([
+            [ (keyword, "public sealed class "); (typeDecl, "Void") ]
+            [ (operator, "{") ]
+            [ (keyword, "  private "); (funcDecl, "Void"); (operator, "() { }") ]
+            [ (operator, "}") ]
+        ], 100., 100., tl.["code"])
+        
+        ctx |> drawLanguageIndicator "C#" tl.["code"]
     )
 }
 
@@ -660,7 +709,7 @@ let intro = scene {
     )
 }
 
-intro
+voidOO
 |> Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.background (color "#000")
     ctx.save ()
