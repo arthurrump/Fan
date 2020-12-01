@@ -553,7 +553,114 @@ let voidIsUnit = scene {
     )
 }
 
-haskell 
+let introWithTitles episode = scene {
+    run (timeline {
+        0 => vars {
+            "todo" => 0
+        }
+        1000 => vars {
+            "todo" => 1
+            "todoLine" => 0
+        }
+        1500 => vars {
+            "todoLine" => (1, EaseOutSine)
+            "title" => 0
+        }
+        2500 => vars {
+            "title" => 1
+            "titleLine" => 0
+            "todoLine" => 1
+        }
+        3000 => vars {
+            "titleLine" => (1, EaseOutSine)
+            "todoLine" => (2, EaseOutSine)
+            "episode" => 0
+        }
+        4000 => vars {
+            "episode" => 1
+        }
+        5000 => vars {
+            "todo" => 1
+            "title" => 1
+            "episode" => 1
+        }
+        6000 => vars {
+            "todo" => 0
+            "title" => 0
+            "episode" => 0
+        }
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl -> 
+        ctx.textBaseline <- "middle"
+        ctx.font <- codeFont 84
+        ctx.setStyle comment
+        let yLine line = ctx.height / 2. - line * ctx.currentLineHeight * 1.2
+        ctx.drawText ("// TODO: Create intro", 100., yLine tl.["todoLine"], tl.["todo"])
+        ctx.drawText ("// Category Theory for Programmers", 100., yLine tl.["titleLine"], tl.["title"])
+        ctx.drawText ("// " + episode, 100., yLine 0., tl.["episode"])
+    )
+}
+
+let intro = scene {
+    run (timeline {
+        0 => vars {
+            "slash" => 0
+            "scale" => 6
+        }
+        1300 => vars {
+            "slashX" => 0
+        }
+        1500 => vars {
+            "slash" => (1, EaseOutSine)
+            "scale" => (1, EaseInSine)
+        }
+        2100 => vars {
+            "slashX" => (1, EaseInOutQuad)
+        }
+        2650 => vars {
+            "slashX" => 1
+        }
+        3400 => vars {
+            "slashX" => (-1.5, EaseInQuad)
+        }
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.textBaseline <- "middle"
+        ctx.setStyle comment
+
+        let slashFont = "bold " + (codeFont 360)
+        let textFont = codeFont 100
+
+        ctx.translate (ctx.width / 2., ctx.height / 2.)
+        ctx.scale (tl.["scale"], tl.["scale"])
+
+        ctx.font <- slashFont
+        let slashOffset = -ctx.measureText("//").width / 2.
+        ctx.font <- textFont
+        let textX = -ctx.measureText("Create intro").width
+
+        ctx.font <- slashFont
+        ctx.drawText ("//", slashOffset + tl.["slashX"] * (textX + slashOffset), 0., tl.["slash"], 0.2)
+
+        ctx.save ()
+        ctx.beginPath ()
+        let clipX = tl.["slashX"] * (textX + slashOffset) - 0.5 * slashOffset
+        let slashAngle = 0.404916
+        ctx.moveTo (clipX - ctx.height / 4. * cos(slashAngle), ctx.height / 2.)
+        ctx.lineTo (clipX + ctx.height / 4. * cos(slashAngle), -ctx.height / 2.)
+        ctx.lineTo (ctx.width / 2., -ctx.height / 2.)
+        ctx.lineTo (ctx.width / 2., ctx.height / 2.)
+        ctx.closePath ()
+        ctx.clip ()
+
+        ctx.font <- textFont
+        ctx.fillText ("TODO:", textX, -50. * 1.2)
+        ctx.fillText ("Create intro", textX, 50. * 1.2)
+        ctx.restore ()
+    )
+}
+
+intro
 |> Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.background (color "#000")
     ctx.save ()
