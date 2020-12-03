@@ -54,6 +54,11 @@ let private staggeredProgress stagger length index progress =
     then limit 0. 1. ((stagger + 1.) * progress - (float index * stagger / float (length - 1)))
     else progress
 
+let circlePoint cX cY radius angle =
+    let x = radius * cos(angle) + cX
+    let y = radius * sin(angle) + cY
+    (x, y)
+
 type ExtendedTextMetrics =
     inherit TextMetrics
     abstract actualBoundingBoxAscent : float with get, set
@@ -184,3 +189,35 @@ type CanvasRenderingContext2D with
                 ctx.setStyle (style)
                 ctx.drawText (textProgress, x, y)
                 ctx.restore ()
+    member ctx.fluffyCircle (cX, cY, radius, ?fluffSize, ?seed) =
+        let fluffSize = defaultArg fluffSize (radius / 3.)
+        let seed = defaultArg seed 1.1
+        let circumference = 2. * Math.PI * radius
+        let arcCount = round (circumference / fluffSize)
+        let arcCircCovers = 
+            let random = Seq.init (int arcCount) (fun i -> (Perlin.noise seed (float i * 50.)) * 2. + 1.)
+            let sum = random |> Seq.sum
+            random
+            |> Seq.map (fun i -> i / sum * circumference)
+            |> Seq.mapFold (fun start size -> ((start / radius, size / radius), start + size)) 0.  
+            |> fst
+        ctx.moveTo (cX + radius, cY)
+        for (startAngle, coversAngle) in arcCircCovers do
+            let halfAngle = 0.5 * coversAngle
+            let arcX, arcY = circlePoint cX cY radius (startAngle + halfAngle)
+            let arcRadius = cos((Math.PI - halfAngle) / 2.) * 2. * radius
+
+            let arcBX, arcBY = circlePoint cX cY radius startAngle
+            let beginAngle = 0.5 * Math.PI - atan2 (arcBX - arcX) (arcBY - arcY)
+            let arcEX, arcEY = circlePoint cX cY radius (startAngle + coversAngle)
+            let endAngle = 0.5 * Math.PI - atan2 (arcEX - arcX) (arcEY - arcY)
+
+            ctx.arc (arcX, arcY, arcRadius, beginAngle, endAngle)            
+    member ctx.fluffyEllipse (x, y, radiusX, radiusY, ?rotation, ?fluffSize, ?seed) =
+        ctx.save ()
+        ctx.translate (x, y)
+        if radiusX < radiusY then ctx.scale (1., radiusY / radiusX)
+        elif radiusY < radiusX then ctx.scale (radiusY / radiusX, 1.)
+        ctx.rotate (defaultArg rotation 0.)
+        ctx.fluffyCircle (0., 0., min radiusX radiusY, ?fluffSize = fluffSize, ?seed = seed)
+        ctx.restore ()

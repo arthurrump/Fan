@@ -366,8 +366,8 @@ let drawLanguageIndicator lang progress (ctx : CanvasRenderingContext2D) =
     ctx.save ()
     ctx.setStyle (color "#fff")
     ctx.lineWidth <- 1.
-    ctx.font <- serifFont 60
-    ctx.textBaseline <- "bottom"
+    ctx.font <- codeFont 60
+    ctx.textBaseline <- "alphabetic"
     ctx.drawText (lang, 50., ctx.height - 50., progress)
     ctx.restore ()
 
@@ -602,51 +602,19 @@ let voidOO = scene {
     )
 }
 
-let introWithTitles episode = scene {
-    run (timeline {
-        0 => vars {
-            "todo" => 0
-        }
-        1000 => vars {
-            "todo" => 1
-            "todoLine" => 0
-        }
-        1500 => vars {
-            "todoLine" => (1, EaseOutSine)
-            "title" => 0
-        }
-        2500 => vars {
-            "title" => 1
-            "titleLine" => 0
-            "todoLine" => 1
-        }
-        3000 => vars {
-            "titleLine" => (1, EaseOutSine)
-            "todoLine" => (2, EaseOutSine)
-            "episode" => 0
-        }
-        4000 => vars {
-            "episode" => 1
-        }
-        5000 => vars {
-            "todo" => 1
-            "title" => 1
-            "episode" => 1
-        }
-        6000 => vars {
-            "todo" => 0
-            "title" => 0
-            "episode" => 0
-        }
+let typeSets = scene {
+    run (timeline' (Alternate, Infinite) {
+         0 => vars { "seed" => 1.1 }
+         60000 => vars { "seed" => 2.4 }
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl -> 
-        ctx.textBaseline <- "middle"
-        ctx.font <- codeFont 84
-        ctx.setStyle comment
-        let yLine line = ctx.height / 2. - line * ctx.currentLineHeight * 1.2
-        ctx.drawText ("// TODO: Create intro", 100., yLine tl.["todoLine"], tl.["todo"])
-        ctx.drawText ("// Category Theory for Programmers", 100., yLine tl.["titleLine"], tl.["title"])
-        ctx.drawText ("// " + episode, 100., yLine 0., tl.["episode"])
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.fillStyle <- color "#72cb"
+        ctx.strokeStyle <- color "#72c"
+        ctx.lineWidth <- 3.
+        ctx.beginPath ()
+        ctx.fluffyEllipse (400., 500., 200., 300., seed = tl.["seed"])
+        ctx.fill ()
+        ctx.stroke ()
     )
 }
 
@@ -669,8 +637,8 @@ let intro = scene {
         2650 => vars {
             "slashX" => 1
         }
-        3400 => vars {
-            "slashX" => (-1.5, EaseInQuad)
+        3300 => vars {
+            "slashX" => (-1.5, EaseInCubic)
         }
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
@@ -709,11 +677,11 @@ let intro = scene {
     )
 }
 
-voidOO
+typeSets
 |> Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.background (color "#000")
     ctx.save ()
-    // ctx |> grid 100. (color "#eee")
+    ctx |> grid 100. (color "#eee")
     render ctx tl t
     ctx.restore ()
 )
