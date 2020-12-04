@@ -151,16 +151,22 @@ let grid size style (ctx : CanvasRenderingContext2D) =
     ctx.save ()
     ctx.lineWidth <- 1.
     ctx.strokeStyle <- style
+    ctx.fillStyle <- style
+    ctx.font <- sprintf "%ipx sans-serif" (int size / 4)
+    ctx.textBaseline <- "top"
     for i in 0. .. size .. ctx.width do
         ctx.beginPath ()
         ctx.moveTo (i, 0.)
         ctx.lineTo (i, ctx.height)
         ctx.stroke ()
+        ctx.fillText (string i, i + (size / 10.), size / 10.)
+    ctx.textBaseline <- "alphabetic"
     for i in 0. .. size .. ctx.height do
         ctx.beginPath ()
         ctx.moveTo (0., i)
         ctx.lineTo (ctx.width, i)
         ctx.stroke ()
+        ctx.fillText (string i, size / 10., i - (size / 10.))
     ctx.restore ()
 
 let arrow = scene {
@@ -285,6 +291,11 @@ let inline fadeIn duration easing property = timeline {
     (float duration) => vars { property => (1., easing) }
 }
 
+let inline fadeOut duration easing property = timeline {
+    0 => vars { property => 1. }
+    (float duration) => vars { property => (0., easing) }
+}
+
 type TextAlign = 
     | LeftAbove | CenterAbove | RightAbove
     | Left                    | Right
@@ -364,7 +375,7 @@ let inline flyInBottom toY duration property =
 
 let drawLanguageIndicator lang progress (ctx : CanvasRenderingContext2D) =
     ctx.save ()
-    ctx.setStyle (color "#fff")
+    ctx.setStyle (color "#fffc")
     ctx.lineWidth <- 1.
     ctx.font <- codeFont 60
     ctx.textBaseline <- "alphabetic"
@@ -404,7 +415,7 @@ let boolSet = scene {
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("bool", 100., 200.)
+        ctx.fillText ("Bool", 100., 200.)
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
@@ -430,7 +441,7 @@ let intSet = scene {
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("int", 100., 200.)
+        ctx.fillText ("Int", 100., 200.)
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
@@ -460,7 +471,7 @@ let intRange = scene {
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("int", 100., 200.)
+        ctx.fillText ("Int", 100., 200.)
 
         ctx.drawLongText ([
             [ (operator, "[ "); (numberLit, "−2147483648") ] 
@@ -488,7 +499,7 @@ let stringSet = scene {
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("string", 100., 200.)
+        ctx.fillText ("String", 100., 200.)
         
         ctx.setStyle stringLit
 
@@ -602,21 +613,157 @@ let voidOO = scene {
     )
 }
 
-let typeSets = scene {
-    run (timeline' (Alternate, Infinite) {
-         0 => vars { "seed" => 1.1 }
-         60000 => vars { "seed" => 2.4 }
+let typeCloud x y radiusX radiusY seed (tl : IAnimationValueProvider<string>) (ctx : CanvasRenderingContext2D) =
+    ctx.save ()
+    ctx.fillStyle <- color "#fffa"
+    ctx.strokeStyle <- color "#fffd"
+    ctx.lineWidth <- 3.
+    ctx.beginPath ()
+    ctx.fluffyEllipse (x, y, radiusX, radiusY, seed = tl.["seed"] + seed)
+    ctx.fill ()
+    ctx.stroke ()
+    ctx.restore ()
+
+let setFuncStyle (ctx : CanvasRenderingContext2D) =
+    ctx.setStyle (color "#fff")
+    ctx.lineWidth <- 5.
+
+let func startX startY endX endY curve progressIn progressOut (ctx : CanvasRenderingContext2D) =
+    if progressIn <> progressOut then
+        ctx.save ()
+        ctx |> setFuncStyle
+        ctx.arrow (startX, startY, endX, endY, curve, progressIn, progressOut)
+        ctx.restore ()
+
+let typeSetsFunctions = scene {
+    run (animation {
+        timeline' (Alternate, Infinite) {
+            0 => vars { "seed" => 1.1 }
+            60000 => vars { "seed" => 2.4 }
+        }
+        0 => fadeIn 1000 Linear "init"
+
+        2000 => fadeIn 1000 EaseOutCubic "intbool"
+        4000 => fadeIn 1000 EaseInCubic "intboolout"
+
+        6000 => fadeIn 1000 EaseOutCubic "boolint"
+        8000 => fadeIn 1000 EaseInCubic "boolintout"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
-        ctx.fillStyle <- color "#72cb"
-        ctx.strokeStyle <- color "#72c"
-        ctx.lineWidth <- 3.
-        ctx.beginPath ()
-        ctx.fluffyEllipse (400., 500., 200., 300., seed = tl.["seed"])
-        ctx.fill ()
-        ctx.stroke ()
+        ctx.setStyle typeDecl
+        ctx.font <- codeFont 70
+
+        ctx.globalAlpha <- tl.["init"]
+
+        ctx.drawText ("Int", 100., 300., tl.["init"])
+        ctx |> typeCloud 200. 500. 100. 150. 0. tl
+
+        ctx.drawText ("Bool", 500., 230., tl.["init"])
+        ctx |> typeCloud 550. 450. 90. 160. (15./7.) tl
+
+        ctx.setStyle funcDecl
+        ctx.textBaseline <- "top"
+
+        ctx.drawText ("isOdd", 100., 100., tl.["intbool"] - tl.["intboolout"])
+        ctx |> func 180. 450. 530. 400. -70. tl.["intbool"] tl.["intboolout"]
+        ctx |> func 200. 480. 580. 405. 60. tl.["intbool"] tl.["intboolout"]
+        ctx |> func 150. 530. 580. 405. 80. tl.["intbool"] tl.["intboolout"]
+
+        ctx.drawText ("toInt", 100., 100., tl.["boolint"] - tl.["boolintout"])
+        ctx |> func 550. 400. 180. 470. 50. tl.["boolint"] tl.["boolintout"]
+        ctx |> func 550. 500. 210. 540. -10. tl.["boolint"] tl.["boolintout"]
     )
 }
+
+let haskellToInt = scene {
+    run (animation {
+        0 => fadeIn 1000 Linear "init"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.font <- codeFont 70
+        ctx.drawLongText([
+            [ (funcDecl, "toInt "); (operator, ":: "); (typeDecl, "Bool"); (operator, " -> "); (typeDecl, "Int") ]
+            [ (text, "toInt False = "); (numberLit, "0") ]
+            [ (text, "toInt True = "); (numberLit, "1") ]
+        ], 100., 450., tl.["init"])
+        ctx |> drawLanguageIndicator "Haskell" tl.["init"]
+    )
+}
+
+let setDefinesFunc = scene {
+    run (animation {
+        timeline' (Alternate, Infinite) {
+            0 => vars { "seed" => 1.4 }
+            60000 => vars { "seed" => 2.9 }
+        }
+        0 => fadeIn 1000 Linear "init"
+
+        1000 => fadeIn 1000 EaseOutCubic "ignore"
+        3000 => fadeIn 1000 EaseInCubic "ignoreout"
+
+        5000 => fadeIn 1000 EaseOutCubic "absurd"
+        7000 => fadeIn 1000 EaseInCubic "absurdout"
+
+        9000 => fadeIn 1000 EaseOutCubic "id"
+        11000 => fadeIn 1000 EaseInCubic "idout"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.setStyle typeDecl
+        ctx.font <- codeFont 70
+
+        ctx.globalAlpha <- tl.["init"]
+
+        ctx.drawText ("Void", 400., 250., tl.["init"])
+        ctx |> typeCloud 500. 400. 100. 100. 0. tl
+
+        ctx.textBaseline <- "top"
+
+        ctx.drawText ("Bool", 200., 900., tl.["init"])
+        ctx |> typeCloud 300. 700. 90. 140. (15./7.) tl
+
+        ctx.drawText ("Unit", 680., 860., tl.["init"])
+        ctx |> typeCloud 700. 700. 100. 110. (29./12.) tl
+
+        ctx |> func 500. 400. 700. 700. -100. tl.["ignore"] tl.["ignoreout"]
+        ctx |> func 280. 720. 700. 700. 40. tl.["ignore"] tl.["ignoreout"]
+
+        ctx |> func 500. 400. 700. 700. -70. tl.["absurd"] tl.["absurdout"]
+        ctx |> func 500. 400. 280. 650. 100. tl.["absurd"] tl.["absurdout"]
+        ctx |> func 500. 400. 310. 730. -60. tl.["absurd"] tl.["absurdout"]
+
+        ctx.save ()
+        ctx |> setFuncStyle
+        ctx.arcArrow (560., 400., 70., -0.9 * Math.PI + 1.8 * Math.PI * tl.["idout"], -0.9 * Math.PI + 1.8 * Math.PI * tl.["id"])
+        ctx.arcArrow (240., 700., 70., 0.1 * Math.PI + 1.8 * Math.PI * tl.["idout"], 0.1 * Math.PI + 1.8 * Math.PI * tl.["id"])
+        ctx.arcArrow (770., 700., 70., -0.9 * Math.PI + 1.8 * Math.PI * tl.["idout"], -0.9 * Math.PI + 1.8 * Math.PI * tl.["id"])
+        ctx.restore ()
+    )
+}
+
+let sideEffect = scene {
+    run (animation {
+        0 => fadeIn 1000 Linear "init"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.font <- codeFont 70
+        ctx.textBaseline <- "top"
+        ctx.drawLongText([
+            [ (keyword, "public "); (typeDecl, "double "); (funcDecl, "Square"); (text, "(")
+              (typeDecl, "double "); (text, "x) {") ]
+            [ (text, "  System.out."); (funcDecl, "println"); (text, "("); (stringLit, "\"Squaring \""); (text, " + x);") ]
+            [ (control, "  return "); (text, "x * x;") ]
+            [ (text, "}") ]
+        ], 100., 100., tl.["init"])
+        ctx |> drawLanguageIndicator "Java" tl.["init"]
+    )
+}
+
+let scenes =
+    [ // 1: Types and functions
+      types; boolSet; intSet; intRange; stringSet; unitSet; voidIsUnit; voidSet; voidOO
+      typeSetsFunctions; haskellToInt; setDefinesFunc
+      // 2: Why types?
+      sideEffect ]
 
 let intro = scene {
     run (timeline {
@@ -677,11 +824,19 @@ let intro = scene {
     )
 }
 
-typeSets
+let ind =
+    match Int32.TryParse(window.location.hash.TrimStart('#')) with
+    | true, i when i >= 0 -> i
+    | true, i -> scenes.Length + i
+    | false, _ -> 0
+
+window.onhashchange <- fun _ -> window.location.reload (true)
+
+scenes.[ind]
 |> Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.background (color "#000")
     ctx.save ()
-    ctx |> grid 100. (color "#eee")
+    // ctx |> grid 100. (color "#eee")
     render ctx tl t
     ctx.restore ()
 )

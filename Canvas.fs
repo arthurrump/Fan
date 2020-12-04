@@ -217,7 +217,7 @@ type CanvasRenderingContext2D with
         ctx.save ()
         ctx.translate (x, y)
         if radiusX < radiusY then ctx.scale (1., radiusY / radiusX)
-        elif radiusY < radiusX then ctx.scale (radiusY / radiusX, 1.)
+        elif radiusY < radiusX then ctx.scale (radiusX / radiusY, 1.)
         ctx.rotate (defaultArg rotation 0.)
         ctx.fluffyCircle (0., 0., min radiusX radiusY, ?fluffSize = fluffSize, ?seed = seed)
         ctx.restore ()
