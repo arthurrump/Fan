@@ -12,6 +12,18 @@ module List =
                 else None, found |> Set.add elem
             ) (Set.empty) list
         duplicates |> List.choose id
+    let reduceOrDefault reducer def list =
+        if list |> List.isEmpty
+        then def
+        else list |> List.reduce reducer
+    let maxOrDefault def list =
+        if list |> List.isEmpty
+        then def
+        else list |> List.max
+
+module Map =
+    let combine map1 map2 =
+        map1 |> Map.fold (fun map2 key value -> map2 |> Map.add key value) map2
 
 type Easing = 
     | Linear
@@ -122,7 +134,11 @@ module Timeline =
         { tl with Delay = (float delay) }
     
     let duration tl =
-        tl.Delay + (tl.Timestamps |> List.map fst |> List.max)
+        let repeat = 
+            match tl.Loop with
+            | Repeat x -> x
+            | Infinite -> 1
+        tl.Delay + (tl.Timestamps |> List.map fst |> List.maxOrDefault 0.) * float repeat
 
 type TimelineBuilder(?direction, ?loop) =
     let direction = defaultArg direction Normal
@@ -144,15 +160,16 @@ type TimelineBuilder(?direction, ?loop) =
 let timeline = TimelineBuilder()
 let timeline' (direction, loop) = TimelineBuilder (direction, loop)
 
-let private calculateTimeline timeline =
+let private calculateTimeline initials timeline =
     let ts = timeline.Timestamps |> List.sortBy fst
-    let totalDur = ts |> List.last |> fst
+    let totalDur = ts |> List.tryLast |> Option.map fst |> Option.defaultValue 0.
     let chooseKeys var (t, vars) = 
         vars 
         |> List.tryFind (fun (v, _) -> v = var) 
         |> Option.map (fun (_, key) -> (t, key))
     let getKeys var = 
         let keys = ts |> List.choose (chooseKeys var)
+        let initialValue = initials |> Map.tryFind var |> Option.defaultValue (snd keys.Head).Value
         keys 
         |> List.mapFold (fun (startTime, prev) (endTime, key) ->
             let valueFunc t = 
@@ -162,10 +179,22 @@ let private calculateTimeline timeline =
                 prev + (key.Value - prev) * easedProgression
             {| StartTime = startTime; EndTime = endTime
                Value = key.Value; ValueFunc = valueFunc |},
-            (endTime, key.Value)) (0., (snd keys.Head).Value)
+            (endTime, key.Value)) (0., initialValue)
         |> fst
-    ts |> List.collect snd |> List.map fst |> List.distinct
+    let vars = ts |> List.collect snd |> List.map fst |> List.distinct
+    let initialOnly = 
+        let initialVars = initials |> Map.toSeq |> Seq.map fst |> Set.ofSeq
+        initialVars - (vars |> Set.ofList)
+        |> Set.toList
+        |> List.map (fun v ->
+            let value = initials.[v]
+            let key = 
+                {| StartTime = 0.; EndTime = totalDur
+                   Value = value; ValueFunc = fun _ -> value |}
+            v, [ key ])
+    vars
     |> List.map (fun var -> var, getKeys var)
+    |> List.append initialOnly
     |> Map.ofList
     |> Map.map (fun _ keys ->    
         fun t -> 
@@ -203,33 +232,78 @@ let private calculateTimeline timeline =
                 key.Value
     )
 
+let rec private gcd x y = if y = 0. then abs x else gcd y (x % y)
+let private lcm x y = x * y / (gcd x y)
+
 type AnimationDuration = 
     | FixedDuration of float 
-    | InfiniteDuration
-type Animation<'t when 't : comparison>(timelines : Timeline<'t> list) =
-    let animationFunctions = 
-        timelines 
-        |> List.collect (calculateTimeline >> Map.toList)
-    do for var in animationFunctions |> List.map fst |> List.duplicates do
-        console.warn (
-            "Variable", var, "is defined in multiple parallel timelines.",
-            "Only the definition in the first timeline will be used.")
-    let functionsMap = 
+    | InfiniteDuration of initialBlock : float * loop : float
+
+let isInfinite = function
+    | InfiniteDuration _ -> true
+    | _ -> false
+
+let singleDuration = function
+    | FixedDuration d -> d
+    | InfiniteDuration (initial, _) -> initial
+
+type Animation<'t when 't : comparison>(timelines : Timeline<'t> list, initials : Map<'t, float>) =
+    let functionsMap = lazy (
+        let animationFunctions = 
+            timelines 
+            |> List.collect (calculateTimeline initials >> Map.toList)
+        do for var in animationFunctions |> List.map fst |> List.duplicates do
+            console.warn (
+                "Variable", var, "is defined in multiple parallel timelines.",
+                "Only the definition in the first timeline will be used.")
         animationFunctions 
         |> List.distinctBy fst 
         |> Map.ofList
-    member __.Timelines = timelines
+    )
+
+    new(timelines : Timeline<'t> list) = Animation(timelines, Map.empty)
+    member __.WithTimeline (tl) = Animation(tl::timelines, initials)
+    member __.WithTimelines (tl) = Animation(tl @ timelines, initials)
+    member __.WithInitial (key, value) = Animation(timelines, initials |> Map.add key value)
+    member __.WithInitials (i) = Animation(timelines, Map.combine i initials)
+
+    member __.Timelines = 
+        timelines
+    member __.Variables = 
+        timelines 
+        |> List.collect (fun tl -> tl.Timestamps)
+        |> List.collect snd
+        |> List.map fst
+        |> List.append (initials |> Map.toList |> List.map fst)
+        |> List.distinct
     member val Duration = 
-        if timelines |> List.isEmpty
-        then FixedDuration 0.
-        elif timelines |> List.exists (fun tl -> tl.Loop = Infinite)
-        then InfiniteDuration
-        else timelines |> List.map Timeline.duration |> List.max |> FixedDuration
-    member __.Item (var) = functionsMap.[var]
+        if timelines |> List.isEmpty then 
+            FixedDuration 0.
+        elif timelines |> List.exists (fun tl -> tl.Loop = Infinite) then 
+            let loopDuration = 
+                timelines 
+                |> List.filter (fun tl -> tl.Loop = Infinite) 
+                |> List.map Timeline.duration
+                |> List.reduceOrDefault lcm 0.
+            let maxFiniteDuration =
+                timelines
+                |> List.filter (fun tl -> tl.Loop <> Infinite)
+                |> List.map Timeline.duration
+                |> List.maxOrDefault 0.
+            let initialIterations =
+                Seq.initInfinite ((+) 1)
+                |> Seq.find (fun i -> float i * loopDuration >= maxFiniteDuration)
+            InfiniteDuration (float initialIterations * loopDuration, loopDuration)
+        else 
+            timelines |> List.map Timeline.duration |> List.max |> FixedDuration
+    member __.Item (var) = 
+        functionsMap.Value.[var]
+    member __.TryItem (var) = 
+        functionsMap.Value |> Map.tryFind var
 
 type AnimationBuilder<'t when 't : comparison>() =
     member __.Zero () =
-        []
+        [ timeline.Zero () |> timeline.Run ]
     member __.Yield ((delay, timeline) : float * Timeline<'t>) =
         [ { timeline with Delay = delay } ]
     member this.Yield ((delay, timeline) : int * Timeline<'t>) =
@@ -271,7 +345,7 @@ type SceneBuilder<'t, 'r when 't : comparison>() =
         this.Zero ()
     [<CustomOperation("enter")>]
     member __.EnterAnimation (scene, enter : Animation<'t>) =
-        if enter.Duration = InfiniteDuration then
+        if enter.Duration |> isInfinite then
             console.warn (
                 "Scene with infinite enter animation detected. Please use the run animation",
                 "for repeating loops. Enter should only be used to transition into the scene.")
@@ -285,7 +359,7 @@ type SceneBuilder<'t, 'r when 't : comparison>() =
         this.RunAnimation (scene, animationSingle run)
     [<CustomOperation("leave")>]
     member __.LeaveAnimation (scene, leave : Animation<'t>) =
-        if leave.Duration = InfiniteDuration then
+        if leave.Duration |> isInfinite then
             console.warn (
                 "Scene with infinite leave animation detected. Please use the run animation",
                 "for repeating loops. Leave should only be used to transition out of the scene.")
@@ -299,6 +373,25 @@ type SceneBuilder<'t, 'r when 't : comparison>() =
         this.Render (scene, fun r a _ -> render r a)
     member this.Render (scene, render : 'r -> unit) =
         this.Render (scene, fun r _ _ -> render r)
+    member __.Run (scene) =
+        let initials (anim : Animation<'t>) =
+            anim.Variables
+            |> List.map (fun var -> var, anim.[var] (anim.Duration |> singleDuration))
+            |> Map.ofList
+        let reverseInitials vars (anim : Animation<'t>) =
+            vars
+            |> Seq.map (fun var -> var, anim.[var] 0.)
+            |> Map.ofSeq
+        let runAnimation = scene.RunAnimation.WithInitials (initials scene.EnterAnimation)
+        let leaveAnimation = scene.LeaveAnimation.WithInitials (initials runAnimation)
+        let leaveRunDiff = (set leaveAnimation.Variables) - (set runAnimation.Variables)
+        let runAnimation = runAnimation.WithInitials (reverseInitials leaveRunDiff leaveAnimation)
+        let runEnterDiff = (set runAnimation.Variables) - (set scene.EnterAnimation.Variables)
+        let enterAnimation = scene.EnterAnimation.WithInitials (reverseInitials runEnterDiff runAnimation)
+        { scene with
+            EnterAnimation = enterAnimation
+            RunAnimation = runAnimation
+            LeaveAnimation = leaveAnimation }
 
 let scene<'t, 'r when 't : comparison> = SceneBuilder<'t, 'r>()
 
@@ -311,7 +404,14 @@ module Scene =
         window.requestAnimationFrame (run render) |> ignore
        
     let run r scene =
-        let anim t = fun var -> scene.RunAnimation.[var] t
+        let enterDuration = scene.EnterAnimation.Duration |> singleDuration
+        let runDuration = scene.RunAnimation.Duration |> singleDuration
+        let anim t =
+            if t < enterDuration 
+            then fun var -> scene.EnterAnimation.[var] t
+            elif t >= enterDuration && (t < enterDuration + runDuration || isInfinite scene.RunAnimation.Duration) 
+            then fun var -> scene.RunAnimation.[var] (t - enterDuration)
+            else fun var -> scene.LeaveAnimation.[var] (t - enterDuration - runDuration)
         let render t = 
             scene.Render r ({ 
                 new IAnimationValueProvider<'t> with 

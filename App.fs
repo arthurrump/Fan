@@ -118,31 +118,41 @@ let square = scene {
         }
         1000 => vars {
             "rectSize" => 10
-            "rectOffset" => 0.
+            "rectOffset" => 0
         }
         2000 => vars {
-            "rectSize" => (100, EaseInOutBack)
-            "rectOffset" => 20.
+            "rectSize" => (100, EaseOutBack)
+            "rectOffset" => 20
         }
     })
-    // TODO: run should not be needed here
-    run (timeline { 0 => vars { "rectSize" => 100; "rectOffset" => 20. } })
+    run (timeline' (Normal, Repeat 2) {
+        0 => vars {
+            "rotation" => 0.
+        }
+        1500 => vars {
+            "rotation" => 2. * Math.PI
+        }
+    })
     leave (timeline {
         0 => vars {
-            // TODO: get the starting value from the preceding timeline
-            "rectSize" => 100
+            "opacity" => 1.
         }
         1000 => vars {
-            "rectSize" => 0
+            "opacity" => 0.
+            "rectSize" => (0, EaseInExpo)
         }
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.clearRect (0., 0., cnv.width, cnv.height)
-        ctx.beginPath ()
         let offset = tl.["rectOffset"]
         let size = tl.["rectSize"]
-        ctx.rect (offset, offset, size, size)
-        ctx.fillStyle <- rgb (255, 20, 100)
+        let center = offset + size / 2.
+        let topLeft = -size / 2.
+        ctx.translate (center, center)
+        ctx.rotate (tl.["rotation"])
+        ctx.beginPath ()
+        ctx.rect (topLeft, topLeft, size, size)
+        ctx.fillStyle <- rgba (255, 20, 100, tl.["opacity"])
         ctx.fill ()
     )
 }
