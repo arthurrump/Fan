@@ -282,12 +282,6 @@ let haskell = scene {
 
 // window.onhashchange <- fun _ -> window.location.reload (true)
 
-JsInterop.emitJsStatement () """
-if (module.hot) {
-    module.hot.accept()
-}
-"""
-
 [ helloWorld; haskell ] @ CTP.scenes
 |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.background (color "#000")

@@ -440,7 +440,6 @@ module Preview =
     open Browser.Types
     open Elmish
     open Elmish.React
-    open Elmish.HMR
     open Fable.React.Helpers
     open Fable.React.Props
     open Fable.React.Standard
