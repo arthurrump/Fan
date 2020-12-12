@@ -396,14 +396,15 @@ type SceneBuilder<'t, 'r when 't : comparison>() =
 let scene<'t, 'r when 't : comparison> = SceneBuilder<'t, 'r>()
 
 module Scene =
-    let runRender render =
-        let mutable start = 0.
-        let rec run render gt = 
-            render (if start = 0. then start <- gt; 0. else gt - start)
-            window.requestAnimationFrame (run render) |> ignore
-        window.requestAnimationFrame (run render) |> ignore
-       
-    let run r scene =
+    let getAnimationRenderFunction r anim scene =
+        fun t ->
+            scene.Render r ({ 
+                new IAnimationValueProvider<'t> with 
+                    member __.Item (var) = anim t var
+                    member __.Function (var) = fun t -> anim t var
+            }) t
+
+    let getRenderFunction r scene =
         let enterDuration = scene.EnterAnimation.Duration |> singleDuration
         let runDuration = scene.RunAnimation.Duration |> singleDuration
         let anim t =
@@ -412,13 +413,104 @@ module Scene =
             elif t >= enterDuration && (t < enterDuration + runDuration || isInfinite scene.RunAnimation.Duration) 
             then fun var -> scene.RunAnimation.[var] (t - enterDuration)
             else fun var -> scene.LeaveAnimation.[var] (t - enterDuration - runDuration)
-        let render t = 
-            scene.Render r ({ 
-                new IAnimationValueProvider<'t> with 
-                    member __.Item (var) = anim t var
-                    member __.Function (var) = scene.RunAnimation.[var]
-            }) t
-        runRender render
+        getAnimationRenderFunction r anim scene
+        
+    let getEnterRenderFunction r scene =
+        getAnimationRenderFunction r (fun t var -> scene.EnterAnimation.[var] t) scene
+    let getRunRenderFunction r scene =
+        getAnimationRenderFunction r (fun t var -> scene.RunAnimation.[var] t) scene
+    let getLeaveRenderFunction r scene =
+        getAnimationRenderFunction r (fun t var -> scene.LeaveAnimation.[var] t) scene
+
+    let runAnimationLoopRender render =
+        let mutable start = 0.
+        let rec run render gt = 
+            render (if start = 0. then start <- gt; 0. else gt - start)
+            window.requestAnimationFrame (run render) |> ignore
+        window.requestAnimationFrame (run render) |> ignore
+       
+    let runAnimationLoop r scene =
+        let render = getRenderFunction r scene
+        runAnimationLoopRender render
 
     let withRender render scene =
         { scene with Render = fun r tl t -> render r tl t scene.Render }
+
+module Preview =
+    open Browser.Types
+    open Elmish
+    open Elmish.React
+    open Elmish.HMR
+    open Fable.React.Helpers
+    open Fable.React.Props
+    open Fable.React.Standard
+
+    type SceneStage = Enter | Run | Leave
+
+    type PreviewState<'t, 'r when 't : comparison> =
+        { CurrentScene : Scene<'t, 'r>
+          CurrentSceneIndex : int
+          SceneStage : SceneStage
+          Time : float }
+       
+    type PreviewMessage<'t, 'r when 't : comparison> =
+        | SwitchScene of int * Scene<'t, 'r>
+        | SetStage of SceneStage
+        | SetTime of float
+        | StartPlaying
+        | StopPlaying
+
+    let runPreview renderingCtx appDivId scenes =
+        let init () = 
+            { CurrentScene = scenes |> List.head
+              CurrentSceneIndex = 0
+              SceneStage = Enter
+              Time = 0. }
+        let update msg state =
+            match msg with
+            | SwitchScene (i, scene) -> { state with CurrentScene = scene; CurrentSceneIndex = i }
+            | SetStage stage -> { state with SceneStage = stage }
+            | SetTime time -> { state with Time = time }
+        let renderScene model =
+            let render =
+                match model.SceneStage with
+                | Enter -> Scene.getEnterRenderFunction
+                | Run -> Scene.getRunRenderFunction
+                | Leave -> Scene.getLeaveRenderFunction
+            render renderingCtx model.CurrentScene model.Time
+        let maxTime model =
+            match model.SceneStage with
+            | Enter -> model.CurrentScene.EnterAnimation.Duration |> singleDuration
+            | Run -> model.CurrentScene.RunAnimation.Duration |> singleDuration
+            | Leave -> model.CurrentScene.LeaveAnimation.Duration |> singleDuration
+        let view model dispatch =
+            let dispatchButton message value style =
+                input [ 
+                    Type "button"
+                    OnClick (fun _ -> dispatch message)
+                    Value value
+                    Style style
+                ]
+            do renderScene model
+            div [] [
+                input [ 
+                    Type "range"
+                    Min 0.; Max (maxTime model)
+                    Value model.Time
+                    OnChange (fun ev -> dispatch (SetTime (ev.target :?> HTMLInputElement).valueAsNumber))
+                    Style [ Width "100%" ] ]
+                dispatchButton StartPlaying "Play" []
+                dispatchButton StopPlaying "Stop" []
+                p [] [
+                    dispatchButton (SetStage Enter) "Enter" [ if model.SceneStage = Enter then FontWeight "bold" ]
+                    dispatchButton (SetStage Run) "Run" [ if model.SceneStage = Run then FontWeight "bold" ]
+                    dispatchButton (SetStage Leave) "Leave" [ if model.SceneStage = Leave then FontWeight "bold" ]
+                ]
+                p [] [
+                    for i, scene in scenes |> List.indexed do
+                        dispatchButton (SwitchScene (i, scene)) i [ if model.CurrentSceneIndex = i then FontWeight "bold" ]
+                ]
+            ]
+        Program.mkSimple init update view
+        |> Program.withReactBatched appDivId
+        |> Program.run
