@@ -445,31 +445,24 @@ module Preview =
     open Fable.React.Standard
 
     type SceneStage = Enter | Run | Leave
+    type Playing = Playing of lastFrameTime : float | Paused
 
     type PreviewState<'t, 'r when 't : comparison> =
         { CurrentScene : Scene<'t, 'r>
           CurrentSceneIndex : int
           SceneStage : SceneStage
-          Time : float }
+          Time : float
+          Playing : Playing }
        
     type PreviewMessage<'t, 'r when 't : comparison> =
-        | SwitchScene of int * Scene<'t, 'r>
+        | SetScene of int * Scene<'t, 'r>
         | SetStage of SceneStage
         | SetTime of float
+        | AnimationFrameGranted of time : float
         | StartPlaying
-        | StopPlaying
+        | PausePlaying
 
     let runPreview renderingCtx appDivId scenes =
-        let init () = 
-            { CurrentScene = scenes |> List.head
-              CurrentSceneIndex = 0
-              SceneStage = Enter
-              Time = 0. }
-        let update msg state =
-            match msg with
-            | SwitchScene (i, scene) -> { state with CurrentScene = scene; CurrentSceneIndex = i }
-            | SetStage stage -> { state with SceneStage = stage }
-            | SetTime time -> { state with Time = time }
         let renderScene model =
             let render =
                 match model.SceneStage with
@@ -482,7 +475,44 @@ module Preview =
             | Enter -> model.CurrentScene.EnterAnimation.Duration |> singleDuration
             | Run -> model.CurrentScene.RunAnimation.Duration |> singleDuration
             | Leave -> model.CurrentScene.LeaveAnimation.Duration |> singleDuration
+        let requestAnimationFrameCmd = Cmd.ofSub (fun dispatch ->
+            window.requestAnimationFrame (fun t ->
+                dispatch (AnimationFrameGranted t)
+            ) |> ignore
+        )
+        let init () = 
+            { CurrentScene = scenes |> List.head
+              CurrentSceneIndex = 0
+              SceneStage = Enter
+              Time = 0.
+              Playing = Paused }, Cmd.none
+        let update msg model =
+            match msg with
+            | SetScene (i, scene) -> 
+                { model with CurrentScene = scene; CurrentSceneIndex = i; Time = 0. }, Cmd.none
+            | SetStage stage -> 
+                { model with SceneStage = stage; Time = 0. }, Cmd.none
+            | SetTime time -> 
+                { model with Time = time; Playing = Paused }, Cmd.none
+            | AnimationFrameGranted time ->
+                match model.Playing with
+                | Playing lastFrameTime -> 
+                    let dt = time - lastFrameTime
+                    if model.Time + dt < maxTime model then
+                        { model with Playing = Playing time; Time = model.Time + dt }, requestAnimationFrameCmd
+                    else
+                        { model with Playing = Paused; Time = maxTime model }, Cmd.none
+                | Paused ->
+                    model, Cmd.none
+            | StartPlaying ->
+                { model with 
+                    Playing = Playing (Fable.Core.JsInterop.emitJsExpr () "performance.now()") 
+                    Time = if model.Time = maxTime model then 0. else model.Time }
+                , requestAnimationFrameCmd
+            | PausePlaying ->
+                { model with Playing = Paused }, Cmd.none
         let view model dispatch =
+            do renderScene model
             let dispatchButton message value style =
                 input [ 
                     Type "button"
@@ -490,7 +520,6 @@ module Preview =
                     Value value
                     Style style
                 ]
-            do renderScene model
             div [] [
                 input [ 
                     Type "range"
@@ -498,8 +527,9 @@ module Preview =
                     Value model.Time
                     OnChange (fun ev -> dispatch (SetTime (ev.target :?> HTMLInputElement).valueAsNumber))
                     Style [ Width "100%" ] ]
-                dispatchButton StartPlaying "Play" []
-                dispatchButton StopPlaying "Stop" []
+                match model.Playing with
+                | Playing _ -> dispatchButton PausePlaying "Pause" []
+                | Paused -> dispatchButton StartPlaying "Play" []
                 p [] [
                     dispatchButton (SetStage Enter) "Enter" [ if model.SceneStage = Enter then FontWeight "bold" ]
                     dispatchButton (SetStage Run) "Run" [ if model.SceneStage = Run then FontWeight "bold" ]
@@ -507,9 +537,9 @@ module Preview =
                 ]
                 p [] [
                     for i, scene in scenes |> List.indexed do
-                        dispatchButton (SwitchScene (i, scene)) i [ if model.CurrentSceneIndex = i then FontWeight "bold" ]
+                        dispatchButton (SetScene (i, scene)) i [ if model.CurrentSceneIndex = i then FontWeight "bold" ]
                 ]
             ]
-        Program.mkSimple init update view
+        Program.mkProgram init update view
         |> Program.withReactBatched appDivId
         |> Program.run
