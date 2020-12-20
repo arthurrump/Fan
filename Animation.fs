@@ -2,6 +2,7 @@ module Animation
 
 open System
 open Browser.Dom
+open Thoth.Json
 
 module List =
     let duplicates list =
@@ -453,6 +454,22 @@ module Preview =
           SceneStage : SceneStage
           Time : float
           Playing : Playing }
+
+    let encodePreviewState state =
+        Encode.object [
+            "currentSceneIndex", Encode.int state.CurrentSceneIndex
+            "sceneStage", Encode.Auto.generateEncoder<SceneStage>() state.SceneStage
+            "time", Encode.float state.Time
+        ]
+
+    let decodePreviewState (scenes : Scene<'t, 'r> list)=
+        Decode.object <| fun get ->
+            let index = get.Required.Field "currentSceneIndex" Decode.int
+            { CurrentScene = scenes.[index]
+              CurrentSceneIndex = index
+              SceneStage = get.Required.Field "sceneStage" (Decode.Auto.generateDecoder<SceneStage>())
+              Time = get.Required.Field "time" Decode.float
+              Playing = Paused }
        
     type PreviewMessage<'t, 'r when 't : comparison> =
         | SetScene of int * Scene<'t, 'r>
@@ -461,6 +478,15 @@ module Preview =
         | AnimationFrameGranted of time : float
         | StartPlaying
         | PausePlaying
+
+    let withHashState program =
+        let urlUpdate update msg model =
+            let (newModel, cmd) = update msg model
+            let hash = Encode.toString 0 (encodePreviewState newModel)
+            if newModel.Playing = Paused then
+                history.replaceState ((), url = "#" + window.btoa hash)
+            newModel, Cmd.batch [ cmd; ]
+        Program.map id urlUpdate id id id program
 
     let runPreview renderingCtx appDivId scenes =
         let renderScene model =
@@ -480,12 +506,23 @@ module Preview =
                 dispatch (AnimationFrameGranted t)
             ) |> ignore
         )
-        let init () = 
+        let defaultState = 
             { CurrentScene = scenes |> List.head
               CurrentSceneIndex = 0
               SceneStage = Enter
               Time = 0.
               Playing = Paused }, Cmd.none
+        let init () = 
+            let hash = window.location.hash.TrimStart '#' |> window.atob
+            if String.IsNullOrWhiteSpace hash then 
+                defaultState
+            else 
+                match Decode.fromString (decodePreviewState scenes) hash with
+                | Ok state -> 
+                    state, Cmd.none
+                | Error msg ->
+                    console.error ("Error parsing state hash:", msg)
+                    defaultState
         let update msg model =
             match msg with
             | SetScene (i, scene) -> 
@@ -541,5 +578,6 @@ module Preview =
                 ]
             ]
         Program.mkProgram init update view
+        |> withHashState
         |> Program.withReactBatched appDivId
         |> Program.run
