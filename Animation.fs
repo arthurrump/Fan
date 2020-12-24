@@ -479,13 +479,29 @@ module Preview =
         | StartPlaying
         | PausePlaying
 
+    let throttle t (f : 'a -> unit) =
+        let mutable timeout = None
+        let mutable lastArg = None
+        let rec exec x =
+            lastArg <- None
+            f x
+            timeout <- Some (window.setTimeout (onTimeout, t))
+        and onTimeout _ =
+            match lastArg with
+            | Some x -> exec x
+            | None -> timeout <- None
+        fun (x : 'a) ->
+            match timeout with
+            | Some _ -> lastArg <- Some x
+            | None -> exec x
+
     let withHashState program =
+        let updateHistory = throttle 500 (fun hash -> history.replaceState ((), url = "#" + window.btoa hash))
         let urlUpdate update msg model =
             let (newModel, cmd) = update msg model
             let hash = Encode.toString 0 (encodePreviewState newModel)
-            if newModel.Playing = Paused then
-                history.replaceState ((), url = "#" + window.btoa hash)
-            newModel, Cmd.batch [ cmd; ]
+            updateHistory hash
+            newModel, cmd
         Program.map id urlUpdate id id id program
 
     let runPreview renderingCtx appDivId scenes =
