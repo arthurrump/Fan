@@ -266,7 +266,7 @@ let haskell = scene {
         ctx.font <- CTP.codeFont 200
         ctx.setStyle (color "#fff")
         ctx.textBaseline <- "top"
-        ctx.drawLongText (text, 100., (ctx.height - float text.Length * ctx.currentLineHeight * 1.2) / 2., tl.["progress"])
+        ctx.drawLongText (text, 100., (ctx.height - float text.Length * ctx.actualLineHeight * 1.2) / 2., tl.["progress"])
 
         ctx.restore ()
     )

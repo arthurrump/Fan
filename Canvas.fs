@@ -66,9 +66,24 @@ type ExtendedTextMetrics =
     abstract fontBoundingBoxAscent : float with get, set
     abstract fontBoundingBoxDescent : float with get, set
 
+module private CanvasContext =
+    let mutable lineHeight = 1.2
+
 type CanvasRenderingContext2D with
+    member __.lineHeight with get () = CanvasContext.lineHeight
+    member __.lineHeight with set (value) = CanvasContext.lineHeight <- value
     member ctx.width = ctx.canvas.width
     member ctx.height = ctx.canvas.height
+    member ctx.actualLineHeight with get () = 
+        let textHeight =
+            let longText = String [|'0'..'z'|]
+            let m = ctx.measureText(longText) :?> ExtendedTextMetrics
+            if not (isNullOrUndefined m.fontBoundingBoxAscent) 
+            then m.fontBoundingBoxAscent + m.fontBoundingBoxDescent
+            elif not (isNullOrUndefined m.actualBoundingBoxAscent)
+            then m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
+            else ctx.measureText("GMX").width / 3.
+        textHeight * ctx.lineHeight
     member ctx.setStyle (style) =
         ctx.strokeStyle <- style
         ctx.fillStyle <- style
@@ -159,23 +174,14 @@ type CanvasRenderingContext2D with
             |> Seq.indexed
             |> Seq.map (fun (i, ch) -> ch, staggeredProgress stagger text.Length i progress)
         ctx.drawText (textProgress, x, y)
-    member ctx.currentLineHeight with get () = 
-        let longText = String [|'0'..'z'|]
-        let m = ctx.measureText(longText) :?> ExtendedTextMetrics
-        if not (isNullOrUndefined m.fontBoundingBoxAscent) 
-        then m.fontBoundingBoxAscent + m.fontBoundingBoxDescent
-        elif not (isNullOrUndefined m.actualBoundingBoxAscent)
-        then m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
-        else ctx.measureText("GMX").width / 3.
-    member ctx.drawLongText (text : (Style * string) list list, x, y, ?progress, ?stagger, ?lineHeight) = 
+    member ctx.drawLongText (text : (Style * string) list list, x, y, ?progress, ?stagger) = 
         let progress = defaultArg progress 1.
         let stagger = defaultArg stagger 0.5
-        let lineHeight = (defaultArg lineHeight 1.2) * ctx.currentLineHeight
         let charCountPerBlock = text |> List.map (List.map (snd >> String.length))
         let charCountPerLine = charCountPerBlock |> List.map List.sum
         let charCountTotal = charCountPerLine |> List.sum
         for li, line in text |> List.indexed do
-            let y = y + float li * lineHeight
+            let y = y + float li * ctx.actualLineHeight
             let textSizes = line |> List.map (fun (_, str) -> ctx.measureText(str).width)
             let lineStartIndex = charCountPerLine.[0..li-1] |> List.sum
             for i in 0 .. line.Length - 1 do
