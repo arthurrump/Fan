@@ -4,6 +4,10 @@ open System
 open Browser.Dom
 open Thoth.Json
 
+module Math =
+    let rec gcd x y = if y = 0. then abs x else gcd y (x % y)
+    let lcm x y = x * y / (gcd x y)
+
 module List =
     let duplicates list =
         let (duplicates, _) =
@@ -25,6 +29,8 @@ module List =
 module Map =
     let combine map1 map2 =
         map1 |> Map.fold (fun map2 key value -> map2 |> Map.add key value) map2
+    let keys map =
+        map |> Map.toList |> List.map fst
 
 type Easing = 
     | Linear
@@ -117,29 +123,176 @@ type VarsBuilder<'t>() =
 let vars<'t> = VarsBuilder<'t>()
 
 type Timestamp<'t> = float * Var<'t> list
+
+module Timestamps =
+    let duration (ts : Timestamp<'t> list) =
+        ts |> List.map fst |> List.maxOrDefault 0.
+
+    let delay delay (ts : Timestamp<'t> list) : Timestamp<'t> list =
+        if ts |> List.isEmpty
+        then [ delay, [] ]
+        else ts |> List.map (fun (t, vars) -> (t + delay, vars))
+
+    let repeat times (ts : Timestamp<'t> list) : Timestamp<'t> list =
+        let dur = duration ts
+        Seq.init times (fun i -> delay (float i * dur) ts) |> List.concat
+
+    let rotate shift (ts : Timestamp<'t> list) : Timestamp<'t> list =
+        let dur = duration ts
+        ts |> List.map (fun (t, vars) -> ((t + shift) % dur, vars))
+
+    let getVariables (ts : Timestamp<'t> list) =
+        ts 
+        |> List.collect snd
+        |> List.map fst
+        |> List.distinct
+
+    let getVariablesWithInitials (initials : Map<'t, float>) (ts : Timestamp<'t> list) =
+        getVariables ts
+        |> List.append (initials |> Map.keys)
+        |> List.distinct
+
+    let getKeys (ts : Timestamp<'t> list) var =
+        ts 
+        |> List.choose (
+            fun (t, vars) -> 
+                vars 
+                |> List.tryFind (fun (v, _) -> v = var) 
+                |> Option.map (fun (_, key) -> t, key)
+        )
+
+    let private keysToFunction keys =
+        let keys =
+            keys
+            |> List.sortBy fst
+            |> List.mapFold (fun (startTime, prev) (endTime, key) ->
+                let valueFunc t = 
+                    let duration = endTime - startTime
+                    let progression = (t - startTime) / duration
+                    let easedProgression = easingFunction key.Easing progression
+                    prev + (key.Value - prev) * easedProgression
+                {| StartTime = startTime; EndTime = endTime
+                   Value = key.Value; ValueFunc = valueFunc |}, (endTime, key.Value)
+            ) (0., (snd keys.Head).Value)
+            |> fst
+        fun t ->
+            let key = keys |> List.tryFind (fun key -> key.StartTime <= t && t < key.EndTime)
+            match key with
+            | Some key ->   
+                key.ValueFunc t
+            | None when t < keys.Head.StartTime || keys.Length = 1 ->
+                keys.Head.Value
+            | None ->
+                let key = keys |> List.findBack (fun key -> t >= key.EndTime)
+                key.Value
+
+    let calculate (initials : Map<'t, float>) (ts : Timestamp<'t> list) =
+        let initials = [ for KeyValue (var, value) in initials -> var, { Value = value; Easing = Linear } ]
+        let ts =
+            match ts |> List.tryFind (fun (t, _) -> t = 0.) with
+            | Some (t, vars) ->
+                let unset = initials |> List.filter (fun (v, _) -> not (vars |> List.exists (fun (v', _) -> v = v')))
+                (t, unset @ vars)::(ts |> List.filter (fun (t, _) -> t <> 0.))
+            | None -> 
+                (0., initials)::ts
+        ts
+        |> getVariables
+        |> List.map (fun var -> var, getKeys ts var |> keysToFunction)
+        |> Map.ofList
+
+    let truncate endTime (ts : Timestamp<'t> list) : Timestamp<'t> list =
+        let funcs = lazy (calculate Map.empty ts)
+        let (truncated, rest) = ts |> List.partition (fun (t, _) -> t <= endTime)
+        let cutOffVariables = 
+            rest 
+            |> getVariables 
+            // TODO: use custom easing to get the right part of the curve of the original easing
+            |> List.map (fun var -> var, { Value = funcs.Value.[var] endTime; Easing = Linear })
+        truncated @ [ endTime => cutOffVariables ]
+
+    let combine (ts1 : Timestamp<'t> list) (ts2 : Timestamp<'t> list) : Timestamp<'t> list =
+        ts1 @ ts2
+        |> List.groupBy fst
+        |> List.map (fun (t, ts) -> (t, ts |> List.collect snd))
+        |> List.sortBy fst
+
 type Direction = 
     | Normal 
     | Reverse 
     | Alternate
+    
 type Loop = 
     | Repeat of int 
     | Infinite
+
 type Timeline<'t> =
-    { Timestamps : Timestamp<'t> list
-      Delay : float
-      Direction : Direction
-      Loop : Loop }
+    { Initial : Timestamp<'t> list
+      Loop : Timestamp<'t> list }
 
 module Timeline =
     let inline delay delay tl =
-        { tl with Delay = (float delay) }
+        { tl with Initial = Timestamps.delay delay tl.Initial }
     
-    let duration tl =
-        let repeat = 
-            match tl.Loop with
-            | Repeat x -> x
-            | Infinite -> 1
-        tl.Delay + (tl.Timestamps |> List.map fst |> List.maxOrDefault 0.) * float repeat
+    let initialDuration tl = 
+        Timestamps.duration tl.Initial
+
+    let loopDuration tl = 
+        Timestamps.duration tl.Loop
+
+    let getVariables tl =
+        (tl.Initial @ tl.Loop) |> Timestamps.getVariables
+
+    let combine t1 t2 =
+        let i1, i2 = initialDuration t1, initialDuration t2
+        if i1 = i2 then
+            let initial = Timestamps.combine t1.Initial t2.Initial
+            let l1, l2 = loopDuration t1, loopDuration t2
+            let loopDur = if l1 = 0. || l2 = 0. then max l1 l2 else Math.lcm l1 l2
+            let loop = 
+                Timestamps.combine
+                    (t1.Loop |> Timestamps.repeat (int (loopDur / l1)))
+                    (t2.Loop |> Timestamps.repeat (int (loopDur / l2)))
+            { Initial = initial; Loop = loop }
+        else
+            let (long, il), (short, is) =
+                if i1 < i2
+                then (t2, i2), (t1, i1)
+                else (t1, i1), (t2, i2)
+            let ll, ls = loopDuration long, loopDuration short
+            let shortLoopRepeatInitial = if ls = 0. then 0 else int (ceil ((il - is) / ls))
+            let shortLoopShift = if ls = 0. then 0. else (il - is) % ls
+            let initial = 
+                let shortInitialFill = short.Loop |> Timestamps.delay is |> Timestamps.repeat shortLoopRepeatInitial
+                Timestamps.combine
+                    long.Initial
+                    (short.Initial |> Timestamps.combine shortInitialFill |> Timestamps.truncate il)
+            let loopDur = if ll = 0. || ls = 0. then max ll ls else Math.lcm ll ls
+            let loop =
+                Timestamps.combine
+                    (long.Loop |> Timestamps.repeat (int (loopDur / ll)))
+                    (short.Loop |> Timestamps.rotate shortLoopShift |> Timestamps.repeat (int (loopDur / ls)))
+            { Initial = initial; Loop = loop }
+
+    let calculate (initials : Map<'t, float>) (tl : Timeline<'t>) =
+        let initialDur = initialDuration tl
+        let initialFuncs = Timestamps.calculate initials tl.Initial
+        let loopInitials = 
+            tl.Initial 
+            |> Timestamps.getVariablesWithInitials initials
+            |> List.map (fun var -> var, initialFuncs.[var] initialDur)
+            |> Map.ofList
+        let loopDur = loopDuration tl
+        let loopFuncs = Timestamps.calculate loopInitials tl.Loop
+        fun var t ->
+            if t < initialDur then 
+                match initialFuncs |> Map.tryFind var with
+                | Some f -> f t
+                | None -> loopFuncs.[var] 0.
+            elif loopDur > 0. then
+                let t = (t - initialDur) % loopDur
+                loopFuncs.[var] t
+            else
+                initialFuncs.[var] initialDur
 
 type TimelineBuilder(?direction, ?loop) =
     let direction = defaultArg direction Normal
@@ -154,87 +307,27 @@ type TimelineBuilder(?direction, ?loop) =
     member __.Delay (f) = 
         f()
     member __.Combine (t1 : Timestamp<'t> list, t2) = 
-        t1 @ t2
+        Timestamps.combine t1 t2
     member __.Run (timestamps) = 
-        { Timestamps = timestamps; Delay = 0.; Direction = direction; Loop = loop }
+        let dur = Timestamps.duration timestamps
+        let reverse = timestamps |> List.map (fun (t, var) -> (dur - t, var))
+        let repeated =
+            match direction with 
+            | Normal -> Seq.initInfinite (fun _ -> timestamps)
+            | Reverse -> Seq.initInfinite (fun _ -> reverse)
+            | Alternate -> Seq.initInfinite (fun i -> if i % 2 = 0 then timestamps else reverse)
+            |> Seq.mapi (fun i -> Timestamps.delay (float i * dur))
+        match loop with
+        | Repeat i -> 
+            { Initial = repeated |> Seq.take i |> List.concat
+              Loop = [] }
+        | Infinite -> 
+            let i = match direction with Normal -> 1 | Reverse -> 1 | Alternate -> 2
+            { Initial = []
+              Loop = repeated |> Seq.take i |> List.concat }
 
 let timeline = TimelineBuilder()
 let timeline' (direction, loop) = TimelineBuilder (direction, loop)
-
-let private calculateTimeline initials timeline =
-    let ts = timeline.Timestamps |> List.sortBy fst
-    let totalDur = ts |> List.tryLast |> Option.map fst |> Option.defaultValue 0.
-    let chooseKeys var (t, vars) = 
-        vars 
-        |> List.tryFind (fun (v, _) -> v = var) 
-        |> Option.map (fun (_, key) -> (t, key))
-    let getKeys var = 
-        let keys = ts |> List.choose (chooseKeys var)
-        let initialValue = initials |> Map.tryFind var |> Option.defaultValue (snd keys.Head).Value
-        keys 
-        |> List.mapFold (fun (startTime, prev) (endTime, key) ->
-            let valueFunc t = 
-                let duration = endTime - startTime
-                let progression = (t - startTime) / duration
-                let easedProgression = easingFunction key.Easing progression
-                prev + (key.Value - prev) * easedProgression
-            {| StartTime = startTime; EndTime = endTime
-               Value = key.Value; ValueFunc = valueFunc |},
-            (endTime, key.Value)) (0., initialValue)
-        |> fst
-    let vars = ts |> List.collect snd |> List.map fst |> List.distinct
-    let initialOnly = 
-        let initialVars = initials |> Map.toSeq |> Seq.map fst |> Set.ofSeq
-        initialVars - (vars |> Set.ofList)
-        |> Set.toList
-        |> List.map (fun v ->
-            let value = initials.[v]
-            let key = 
-                {| StartTime = 0.; EndTime = totalDur
-                   Value = value; ValueFunc = fun _ -> value |}
-            v, [ key ])
-    vars
-    |> List.map (fun var -> var, getKeys var)
-    |> List.append initialOnly
-    |> Map.ofList
-    |> Map.map (fun _ keys ->    
-        fun t -> 
-            let t = t - timeline.Delay
-            let t =
-                match timeline.Direction, timeline.Loop with
-                | Normal, Infinite -> 
-                    t % totalDur
-                | Reverse, Infinite -> 
-                    totalDur - (t % totalDur)
-                | Alternate, Infinite -> 
-                    let t = t % (2. * totalDur)
-                    if t > totalDur then 2. * totalDur - t else t
-                | Normal, Repeat i ->
-                    if t < float i * totalDur
-                    then t % totalDur
-                    else totalDur
-                | Reverse, Repeat i ->
-                    if t < float i * totalDur
-                    then totalDur - (t % totalDur)
-                    else 0.
-                | Alternate, Repeat i ->
-                    if t < float i * totalDur then
-                        let t = t % (2. * totalDur)
-                        if t > totalDur then 2. * totalDur - t else t
-                    else float (i % 2) * totalDur
-            let key = keys |> List.tryFind (fun key -> key.StartTime <= t && t < key.EndTime)
-            match key with
-            | Some key ->   
-                key.ValueFunc t
-            | None when t < keys.Head.StartTime || keys.Length = 1 ->
-                keys.Head.Value
-            | None ->
-                let key = keys |> List.findBack (fun key -> t >= key.EndTime)
-                key.Value
-    )
-
-let rec private gcd x y = if y = 0. then abs x else gcd y (x % y)
-let private lcm x y = x * y / (gcd x y)
 
 type AnimationDuration = 
     | FixedDuration of float 
@@ -246,81 +339,50 @@ let isInfinite = function
 
 let singleDuration = function
     | FixedDuration d -> d
-    | InfiniteDuration (initial, _) -> initial
+    | InfiniteDuration (initial, loop) -> initial + loop
 
-type Animation<'t when 't : comparison>(timelines : Timeline<'t> list, initials : Map<'t, float>) =
-    let functionsMap = lazy (
-        let animationFunctions = 
-            timelines 
-            |> List.collect (calculateTimeline initials >> Map.toList)
-        do for var in animationFunctions |> List.map fst |> List.duplicates do
-            console.warn (
-                "Variable", var, "is defined in multiple parallel timelines.",
-                "Only the definition in the first timeline will be used.")
-        animationFunctions 
-        |> List.distinctBy fst 
-        |> Map.ofList
-    )
+type Animation<'t when 't : comparison>(timeline : Timeline<'t>, initials : Map<'t, float>) =
+    let animationFunction = lazy (timeline |> Timeline.calculate initials)
 
-    new(timelines : Timeline<'t> list) = Animation(timelines, Map.empty)
-    member __.WithTimeline (tl) = Animation(tl::timelines, initials)
-    member __.WithTimelines (tl) = Animation(tl @ timelines, initials)
-    member __.WithInitial (key, value) = Animation(timelines, initials |> Map.add key value)
-    member __.WithInitials (i) = Animation(timelines, Map.combine i initials)
+    new(timeline : Timeline<'t>) = Animation(timeline, Map.empty)
+    member __.WithTimeline (tl) = Animation(Timeline.combine timeline tl, initials)
+    member __.WithInitial (key, value) = Animation(timeline, initials |> Map.add key value)
+    member __.WithInitials (i) = Animation(timeline, Map.combine i initials)
 
-    member __.Timelines = 
-        timelines
+    member __.Timeline = 
+        timeline
     member __.Variables = 
-        timelines 
-        |> List.collect (fun tl -> tl.Timestamps)
-        |> List.collect snd
-        |> List.map fst
+        timeline 
+        |> Timeline.getVariables
         |> List.append (initials |> Map.toList |> List.map fst)
         |> List.distinct
     member val Duration = 
-        if timelines |> List.isEmpty then 
-            FixedDuration 0.
-        elif timelines |> List.exists (fun tl -> tl.Loop = Infinite) then 
-            let loopDuration = 
-                timelines 
-                |> List.filter (fun tl -> tl.Loop = Infinite) 
-                |> List.map Timeline.duration
-                |> List.reduceOrDefault lcm 0.
-            let maxFiniteDuration =
-                timelines
-                |> List.filter (fun tl -> tl.Loop <> Infinite)
-                |> List.map Timeline.duration
-                |> List.maxOrDefault 0.
-            let initialIterations =
-                Seq.initInfinite ((+) 1)
-                |> Seq.find (fun i -> float i * loopDuration >= maxFiniteDuration)
-            InfiniteDuration (float initialIterations * loopDuration, loopDuration)
-        else 
-            timelines |> List.map Timeline.duration |> List.max |> FixedDuration
+        let id, ld = Timeline.initialDuration timeline, Timeline.loopDuration timeline
+        if ld = 0.
+        then FixedDuration id
+        else InfiniteDuration (id, ld)
     member __.Item (var) = 
-        functionsMap.Value.[var]
-    member __.TryItem (var) = 
-        functionsMap.Value |> Map.tryFind var
+        animationFunction.Value var
 
 type AnimationBuilder<'t when 't : comparison>() =
     member __.Zero () =
-        [ timeline.Zero () |> timeline.Run ]
+        timeline.Zero () |> timeline.Run
     member __.Yield ((delay, timeline) : float * Timeline<'t>) =
-        [ { timeline with Delay = delay } ]
+        timeline |> Timeline.delay delay
     member this.Yield ((delay, timeline) : int * Timeline<'t>) =
         this.Yield ((float delay, timeline))
     member __.Yield (timeline : Timeline<'t>) =
-        [ timeline ]
-    member __.YieldFrom (timelines : #seq<Timeline<'t>>) =
-        timelines |> Seq.toList
+        timeline
+    member this.YieldFrom (timelines : #seq<Timeline<'t>>) =
+        timelines |> Seq.fold (Timeline.combine) (this.Zero ())
     member __.Delay (f) =
         f()
-    member __.Combine (t1 : Timeline<'t> list, t2) =
-        t1 @ t2
-    member this.For (i : 'a seq, f : 'a -> Timeline<'t> list) =
-        i |> Seq.collect f |> this.YieldFrom
-    member __.Run (timelines : Timeline<'t> list) =
-        Animation (timelines)
+    member __.Combine (t1 : Timeline<'t>, t2) =
+        Timeline.combine t1 t2
+    member this.For (i : 'a seq, f : 'a -> Timeline<'t>) =
+        i |> Seq.map f |> this.YieldFrom
+    member __.Run (timeline : Timeline<'t>) =
+        Animation (timeline)
 
 let animation<'t when 't : comparison> = AnimationBuilder<'t>()
 let animationSingle (tl : Timeline<'t>) = animation.Yield (tl) |> animation.Run

@@ -192,8 +192,6 @@ let arrow = scene {
     run (timeline' (Normal, Infinite) {
         0 => vars {
             "arrowDraw" => 0
-            // TODO: don't require values to be set in consequitive timelines
-            "gridOpacity" => 1
         }
         1000 => vars {
             "arrowDraw" => (1, EaseOutSine)
@@ -205,7 +203,7 @@ let arrow = scene {
             "arrowErase" => (1, EaseInSine)
         }
         4000 => []
-    } |> Timeline.delay 1000)
+    } |> Timeline.delay 1000.)
 
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.background (rgb (0, 0, 0))
