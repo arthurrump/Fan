@@ -130,7 +130,7 @@ let node name x y align opacity (ctx : CanvasRenderingContext2D) =
     ctx.restore ()
 
 let category = scene {
-    run (animation {
+    enter (animation {
         fadeIn 1000 Linear "ObjectVoid"
         fadeIn 1000 Linear "ObjectUnit"
         fadeIn 1000 Linear "ObjectBool"
@@ -140,12 +140,7 @@ let category = scene {
         3000 => fadeIn 1000 EaseOutQuad "ArrowBoolUnit"
         4000 => fadeIn 1000 EaseOutQuad "ArrowIdentity"
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl t ->
-        ctx.background (color "#000")
-        ctx.save ()
-
-        // ctx |> grid 100. (color "#eee")
-
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx |> node "Unit" 250. 700. LeftUnder tl.["ObjectUnit"]
         ctx |> node "Bool" 800. 700. RightUnder tl.["ObjectBool"]
         ctx |> node "Void" 525. 300. CenterAbove tl.["ObjectVoid"]
@@ -160,8 +155,6 @@ let category = scene {
         ctx.arrow (765., 710., 285., 710., -50., tl.["ArrowBoolUnit"])
 
         ctx.arcArrow (835., 695., 25., 0.6 * Math.PI, (0.6 - 1.25 * tl.["ArrowIdentity"]) * Math.PI, true)
-
-        ctx.restore ()
     )
 }
 
@@ -180,42 +173,45 @@ let drawLanguageIndicator lang progress (ctx : CanvasRenderingContext2D) =
     ctx.restore ()
 
 let types = scene {
-    run (animation {
-        0 => fadeIn 1000 EaseOutQuad "bool"
-        0 => fadeIn 1000 EaseOutQuad "int"
-        0 => fadeIn 1000 EaseOutQuad "string"
-        0 => fadeIn 1000 EaseOutQuad "char"
-        0 => fadeIn 1000 EaseOutQuad "float"
-        0 => fadeIn 1000 EaseOutQuad "double"
+    enter (animation {
+        0 => fadeIn 1000 EaseOutQuad "enter"
+    })
+    leave (animation {
+        0 => fadeIn 1000 EaseInQuad "leave"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.fillStyle <- typeDecl
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        let flyIn y progress =
-            ctx.height - (ctx.height - y) * progress
+        let flyInOut y =
+            ctx.height - (ctx.height - y) * tl.["enter"] - (y + 120.) * tl.["leave"]
 
-        ctx.fillText ("bool", 100., flyIn 200. tl.["bool"])
-        ctx.fillText ("int", 350., flyIn 350. tl.["int"])
-        ctx.fillText ("string", 200., flyIn 600. tl.["string"])
-        ctx.fillText ("char", 1350., flyIn 500. tl.["char"])
-        ctx.fillText ("float", 1400., flyIn 250. tl.["float"])
-        ctx.fillText ("double", 1300., flyIn 800. tl.["double"])
+        ctx.fillText ("bool", 100., flyInOut 200.)
+        ctx.fillText ("int", 350., flyInOut 350.)
+        ctx.fillText ("string", 200., flyInOut 600.)
+        ctx.fillText ("char", 1350., flyInOut 500.)
+        ctx.fillText ("float", 1400., flyInOut 250.)
+        ctx.fillText ("double", 1300., flyInOut 800.)
     )
 }
 
 let boolSet = scene {
-    run (animation {
-        0 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
-        500 => fadeIn 1000 Linear "values"
+    enter (animation {
+        0 => fadeIn 750 Linear "title"
+        500 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
+        1000 => fadeIn 750 Linear "values"
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl t ->
-        ctx.fillStyle <- typeDecl
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.setStyle typeDecl
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("Bool", 100., 200.)
+        ctx.drawText ("Bool", 100., 200., tl.["title"])
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
@@ -232,17 +228,22 @@ let boolSet = scene {
 }
 
 let intSet = scene {
-    run (animation {
-        0 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
-        500 => fadeIn 1000 Linear "values"
+    enter (animation {
+        0 => fadeIn 750 Linear "title"
+        500 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
+        1000 => fadeIn 750 Linear "values"
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl t ->
-        ctx.fillStyle <- typeDecl
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.setStyle typeDecl
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("Int", 100., 200.)
+        ctx.drawText ("Int", 100., 200., tl.["title"])
 
+        ctx.globalAlpha <- tl.["opacity"]
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
 
@@ -263,11 +264,15 @@ let intSet = scene {
 }
 
 let intRange = scene {
-    run (animation {
-        fadeIn 1000 Linear "range"
+    enter (animation {
+        0 => fadeIn 1000 Linear "range"
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl t ->
-        ctx.fillStyle <- typeDecl
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.setStyle typeDecl
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
@@ -281,25 +286,29 @@ let intRange = scene {
 }
 
 let stringSet = scene {
+    enter (animation {
+        0 => fadeIn 750 Linear "title"
+    })
     run (animation {
         1750 => fromTo 0. -2500. 6000 Linear "shiftUp"
         for i in 0 .. 32 do
             let var = (sprintf "str%i" i)
-            (float i * 250.) => timeline {
+            (i * 250) => timeline {
                 0 => vars { var => 0 }
                 500 => vars { var => 1 }
-                4000 => vars { var => 1 }
-                4500 => vars { var => 0 }
+            }
+            9000 => timeline {
+                0 => vars { var => 1 }
+                500 => vars { var => 0 }
             }
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.translate (0., tl.["shiftUp"])
-
-        ctx.fillStyle <- typeDecl
+        ctx.setStyle typeDecl
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("String", 100., 200.)
+        ctx.drawText ("String", 100., 200., tl.["title"])
         
         ctx.setStyle stringLit
 
@@ -310,17 +319,24 @@ let stringSet = scene {
 }
 
 let unitSet = scene {
-    run (animation {
-        0 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
-        500 => fadeIn 1000 Linear "values"
-        2000 => fadeIn 1000 Linear "void"
+    enter (animation {
+        0 => fadeIn 750 Linear "title"
+        500 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
+        1000 => fadeIn 750 Linear "values"
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl t ->
-        ctx.fillStyle <- typeDecl
+    run (animation {
+        0 => fadeIn 1000 Linear "void"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.setStyle typeDecl
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("Unit", 100., 200.)
+        ctx.drawText ("Unit", 100., 200., tl.["title"])
         
         ctx.drawLongText ([ [ (text, "("); (keyword, "void"); (text, ")") ] ], 500., 200., tl.["void"])
 
@@ -340,10 +356,11 @@ let unitSet = scene {
 }
 
 let voidIsUnit = scene {
+    // TODO: text morph
     run (animation {
         0 => fadeIn 1000 Linear "code"
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.font <- codeFont 70
         ctx.textBaseline <- "top"
         ctx.drawLongText([
@@ -376,16 +393,21 @@ let voidIsUnit = scene {
 }
 
 let voidSet = scene {
-    run (animation {
-        0 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
+    enter (animation {
+        0 => fadeIn 750 Linear "title"
+        500 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
     })
-    render (fun (ctx : CanvasRenderingContext2D) tl t ->
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.fillStyle <- typeDecl
         ctx.font <- codeFont 100
         ctx.textBaseline <- "top"
 
-        ctx.fillText ("Void", 100., 200.)
+        ctx.drawText ("Void", 100., 200., tl.["title"])
         
+        ctx.globalAlpha <- tl.["opacity"]
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
 
@@ -396,10 +418,20 @@ let voidSet = scene {
 }
 
 let voidOO = scene {
-    run (animation {
+    enter (animation {
         0 => fadeIn 1000 Linear "code"
     })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.fillStyle <- typeDecl
+        ctx.font <- codeFont 100
+        ctx.textBaseline <- "top"
+
+        ctx.fillText ("Void", 100., 200.)
+
         ctx.font <- codeFont 70
         ctx.textBaseline <- "top"
         ctx.drawLongText([
@@ -407,7 +439,7 @@ let voidOO = scene {
             [ (operator, "{") ]
             [ (keyword, "  private "); (funcDecl, "Void"); (operator, "() { }") ]
             [ (operator, "}") ]
-        ], 100., 100., tl.["code"])
+        ], 100., 350., tl.["code"])
         
         ctx |> drawLanguageIndicator "C#" tl.["code"]
     )
@@ -436,12 +468,15 @@ let func startX startY endX endY curve progressIn progressOut (ctx : CanvasRende
         ctx.restore ()
 
 let typeSetsFunctions = scene {
+    enter (animation {
+        0 => fadeIn 1000 Linear "init"
+    })
     run (animation {
+        // TODO: create some sort of background animation thing for this
         timeline' (Alternate, Infinite) {
             0 => vars { "seed" => 1.1 }
-            60000 => vars { "seed" => 2.4 }
+            5000 => vars { "seed" => 1.4 }
         }
-        0 => fadeIn 1000 Linear "init"
 
         2000 => fadeIn 1000 EaseOutCubic "intbool"
         4000 => fadeIn 1000 EaseInCubic "intboolout"
@@ -449,16 +484,18 @@ let typeSetsFunctions = scene {
         6000 => fadeIn 1000 EaseOutCubic "boolint"
         8000 => fadeIn 1000 EaseInCubic "boolintout"
     })
+    leave (animation {
+        0 => fadeOut 1000 Linear "init"
+    })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.setStyle typeDecl
         ctx.font <- codeFont 70
 
-        ctx.globalAlpha <- tl.["init"]
 
         ctx.drawText ("Int", 100., 300., tl.["init"])
-        ctx |> typeCloud 200. 500. 100. 150. 0. tl
-
         ctx.drawText ("Bool", 500., 230., tl.["init"])
+        ctx.globalAlpha <- tl.["init"]
+        ctx |> typeCloud 200. 500. 100. 150. 0. tl
         ctx |> typeCloud 550. 450. 90. 160. (15./7.) tl
 
         ctx.setStyle funcDecl
@@ -476,10 +513,14 @@ let typeSetsFunctions = scene {
 }
 
 let haskellToInt = scene {
-    run (animation {
+    enter (animation {
         0 => fadeIn 1000 Linear "init"
     })
+    leave (animation {
+        0 => fadeOut 1000 Linear "opacity"
+    })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
         ctx.font <- codeFont 70
         ctx.drawLongText([
             [ (funcDecl, "toInt "); (operator, ":: "); (typeDecl, "Bool"); (operator, " -> "); (typeDecl, "Int") ]
@@ -491,12 +532,14 @@ let haskellToInt = scene {
 }
 
 let setDefinesFunc = scene {
+    enter (animation {
+        0 => fadeIn 1000 Linear "init"
+    })
     run (animation {
         timeline' (Alternate, Infinite) {
             0 => vars { "seed" => 1.4 }
-            60000 => vars { "seed" => 2.9 }
+            4000 => vars { "seed" => 2.0 }
         }
-        0 => fadeIn 1000 Linear "init"
 
         1000 => fadeIn 1000 EaseOutCubic "ignore"
         3000 => fadeIn 1000 EaseInCubic "ignoreout"
@@ -507,21 +550,22 @@ let setDefinesFunc = scene {
         9000 => fadeIn 1000 EaseOutCubic "id"
         11000 => fadeIn 1000 EaseInCubic "idout"
     })
+    leave (animation {
+        0 => fadeOut 1000 Linear "init"
+    })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.setStyle typeDecl
         ctx.font <- codeFont 70
 
-        ctx.globalAlpha <- tl.["init"]
 
         ctx.drawText ("Void", 400., 250., tl.["init"])
-        ctx |> typeCloud 500. 400. 100. 100. 0. tl
-
         ctx.textBaseline <- "top"
-
         ctx.drawText ("Bool", 200., 900., tl.["init"])
-        ctx |> typeCloud 300. 700. 90. 140. (15./7.) tl
-
         ctx.drawText ("Unit", 680., 860., tl.["init"])
+        
+        ctx.globalAlpha <- tl.["init"]
+        ctx |> typeCloud 500. 400. 100. 100. 0. tl
+        ctx |> typeCloud 300. 700. 90. 140. (15./7.) tl
         ctx |> typeCloud 700. 700. 100. 110. (29./12.) tl
 
         ctx |> func 500. 400. 700. 700. -100. tl.["ignore"] tl.["ignoreout"]
@@ -541,10 +585,14 @@ let setDefinesFunc = scene {
 }
 
 let sideEffect = scene {
-    run (animation {
+    enter (animation {
         0 => fadeIn 1000 Linear "init"
     })
+    leave (animation {
+        0 => fadeOut 1000 Linear "opacity"
+    })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
         ctx.font <- codeFont 70
         ctx.textBaseline <- "top"
         ctx.drawLongText([
