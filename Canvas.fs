@@ -143,12 +143,13 @@ type CanvasRenderingContext2D with
             let ch = string ch
             let x = x + ctx.measureText(text.[0..i-1]).width
             ctx.save ()
+            let alpha = ctx.globalAlpha
             if progress < 1. then
-                ctx.globalAlpha <- 1. - (progress - 0.8) * 5.
+                ctx.globalAlpha <- alpha * (1. - (progress - 0.8) * 5.)
                 ctx.setLineDash [| progress * dashLen; (1. - progress) * dashLen |]
                 ctx.strokeText(ch, x, y)
             if progress > 0.6 then
-                ctx.globalAlpha <- (progress - 0.6) * 2.5
+                ctx.globalAlpha <- alpha * (progress - 0.6) * 2.5
                 ctx.fillText(ch, x, y)
             ctx.restore ()
     member ctx.drawText (text : string, x, y, progress, ?stagger) =
