@@ -1,4 +1,4 @@
-﻿module App
+module App
 
 open Animation
 open Canvas
@@ -282,7 +282,7 @@ let haskell = scene {
 
 CTP.scenes
 |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
-    ctx.background (color "#000")
+    ctx.clear ()
     ctx.save ()
     // ctx |> grid 100. (color "#eee")
     render ctx tl t

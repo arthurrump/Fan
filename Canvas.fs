@@ -87,6 +87,8 @@ type CanvasRenderingContext2D with
     member ctx.setStyle (style) =
         ctx.strokeStyle <- style
         ctx.fillStyle <- style
+    member ctx.clear () =
+        ctx.clearRect (0., 0., ctx.width, ctx.height)
     member ctx.background (?color) =
         let color = defaultArg color (rgb (255, 255, 255))
         let prevFill = ctx.fillStyle
