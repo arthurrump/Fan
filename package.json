@@ -3,7 +3,6 @@
   "main": "App.fs.js",
   "dependencies": {
     "react": "^17.0.1",
-    "react-dom": "^17.0.1",
-    "webm-wasm": "^0.4.1"
+    "react-dom": "^17.0.1"
   }
 }
