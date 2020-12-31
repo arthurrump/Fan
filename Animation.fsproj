@@ -3,6 +3,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="FFmpeg.fs" />
     <Compile Include="Perlin.fs" />
     <Compile Include="Canvas.fs" />
     <Compile Include="Animation.fs" />

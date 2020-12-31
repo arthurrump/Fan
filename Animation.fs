@@ -329,17 +329,18 @@ type TimelineBuilder(?direction, ?loop) =
 let timeline = TimelineBuilder()
 let timeline' (direction, loop) = TimelineBuilder (direction, loop)
 
-type AnimationDuration = 
-    | FixedDuration of float 
-    | InfiniteDuration of initialBlock : float * loop : float
+module Animation =
+    type AnimationDuration = 
+        | FixedDuration of float 
+        | InfiniteDuration of initialBlock : float * loop : float
 
-let isInfinite = function
-    | InfiniteDuration _ -> true
-    | _ -> false
+    let isInfinite = function
+        | InfiniteDuration _ -> true
+        | _ -> false
 
-let singleDuration = function
-    | FixedDuration d -> d
-    | InfiniteDuration (initial, loop) -> initial + loop
+    let singleDuration = function
+        | FixedDuration d -> d
+        | InfiniteDuration (initial, loop) -> initial + loop
 
 type Animation<'t when 't : comparison>(timeline : Timeline<'t>, initials : Map<'t, float>) =
     let animationFunction = lazy (timeline |> Timeline.calculate initials)
@@ -359,8 +360,8 @@ type Animation<'t when 't : comparison>(timeline : Timeline<'t>, initials : Map<
     member val Duration = 
         let id, ld = Timeline.initialDuration timeline, Timeline.loopDuration timeline
         if ld = 0.
-        then FixedDuration id
-        else InfiniteDuration (id, ld)
+        then Animation.FixedDuration id
+        else Animation.InfiniteDuration (id, ld)
     member __.Item (var) = 
         animationFunction.Value var
 
@@ -408,7 +409,7 @@ type SceneBuilder<'t, 'r when 't : comparison>() =
         this.Zero ()
     [<CustomOperation("enter")>]
     member __.EnterAnimation (scene, enter : Animation<'t>) =
-        if enter.Duration |> isInfinite then
+        if enter.Duration |> Animation.isInfinite then
             console.warn (
                 "Scene with infinite enter animation detected. Please use the run animation",
                 "for repeating loops. Enter should only be used to transition into the scene.")
@@ -422,7 +423,7 @@ type SceneBuilder<'t, 'r when 't : comparison>() =
         this.RunAnimation (scene, animationSingle run)
     [<CustomOperation("leave")>]
     member __.LeaveAnimation (scene, leave : Animation<'t>) =
-        if leave.Duration |> isInfinite then
+        if leave.Duration |> Animation.isInfinite then
             console.warn (
                 "Scene with infinite leave animation detected. Please use the run animation",
                 "for repeating loops. Leave should only be used to transition out of the scene.")
@@ -439,7 +440,7 @@ type SceneBuilder<'t, 'r when 't : comparison>() =
     member __.Run (scene) =
         let initials (anim : Animation<'t>) =
             anim.Variables
-            |> List.map (fun var -> var, anim.[var] (anim.Duration |> singleDuration))
+            |> List.map (fun var -> var, anim.[var] (anim.Duration |> Animation.singleDuration))
             |> Map.ofList
         let reverseInitials vars (anim : Animation<'t>) =
             vars
@@ -467,16 +468,21 @@ module Scene =
                     member __.Function (var) = fun t -> anim t var
             }) t
 
-    let getRenderFunction r scene =
-        let enterDuration = scene.EnterAnimation.Duration |> singleDuration
-        let runDuration = scene.RunAnimation.Duration |> singleDuration
+    let getRenderFunction loop r scene =
+        let enterDuration = scene.EnterAnimation.Duration |> Animation.singleDuration
+        let runDuration = scene.RunAnimation.Duration |> Animation.singleDuration
         let anim t =
             if t < enterDuration 
             then fun var -> scene.EnterAnimation.[var] t
-            elif t >= enterDuration && (t < enterDuration + runDuration || isInfinite scene.RunAnimation.Duration) 
+            elif t >= enterDuration && (t < enterDuration + runDuration || (loop && Animation.isInfinite scene.RunAnimation.Duration))
             then fun var -> scene.RunAnimation.[var] (t - enterDuration)
             else fun var -> scene.LeaveAnimation.[var] (t - enterDuration - runDuration)
         getAnimationRenderFunction r anim scene
+
+    let singleDuration scene =
+        Animation.singleDuration (scene.EnterAnimation.Duration)
+        + Animation.singleDuration (scene.RunAnimation.Duration)
+        + Animation.singleDuration (scene.LeaveAnimation.Duration)
         
     let getEnterRenderFunction r scene =
         getAnimationRenderFunction r (fun t var -> scene.EnterAnimation.[var] t) scene
@@ -493,7 +499,7 @@ module Scene =
         window.requestAnimationFrame (run render) |> ignore
        
     let runAnimationLoop r scene =
-        let render = getRenderFunction r scene
+        let render = getRenderFunction true r scene
         runAnimationLoopRender render
 
     let withRender render scene =
@@ -576,9 +582,9 @@ module Preview =
             render renderingCtx model.CurrentScene model.Time
         let maxTime model =
             match model.SceneStage with
-            | Enter -> model.CurrentScene.EnterAnimation.Duration |> singleDuration
-            | Run -> model.CurrentScene.RunAnimation.Duration |> singleDuration
-            | Leave -> model.CurrentScene.LeaveAnimation.Duration |> singleDuration
+            | Enter -> model.CurrentScene.EnterAnimation.Duration |> Animation.singleDuration
+            | Run -> model.CurrentScene.RunAnimation.Duration |> Animation.singleDuration
+            | Leave -> model.CurrentScene.LeaveAnimation.Duration |> Animation.singleDuration
         let requestAnimationFrameCmd = Cmd.ofSub (fun dispatch ->
             window.requestAnimationFrame (fun t ->
                 dispatch (AnimationFrameGranted t)
