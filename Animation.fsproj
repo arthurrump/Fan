@@ -3,7 +3,6 @@
     <TargetFramework>netstandard2.1</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="FFmpeg.fs" />
     <Compile Include="Perlin.fs" />
     <Compile Include="Canvas.fs" />
     <Compile Include="Animation.fs" />
@@ -14,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="Fable.Browser.Dom" Version="2.2.0" />
     <PackageReference Include="Fable.Browser.URL" Version="1.0.0" />
+    <PackageReference Include="Fable.Browser.WebSocket" Version="1.0.1" />
     <PackageReference Include="Fable.Core" Version="3.2.0" />
     <PackageReference Include="Fable.Elmish.React" Version="3.0.1" />
     <PackageReference Include="Thoth.Json" Version="5.0.0" />
