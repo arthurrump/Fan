@@ -4,11 +4,8 @@ open System
 open Browser.Dom
 open Thoth.Json
 
-[<Measure>] type ms
-let inline ms f = LanguagePrimitives.FloatWithMeasure<ms> f
-
 module Math =
-    let rec gcd x y = if y = ms 0. then abs x else gcd y (x % y)
+    let rec gcd x y = if y = 0. then abs x else gcd y (x % y)
     let lcm x y = x * y / (gcd x y)
 
 module List =
@@ -125,11 +122,11 @@ type VarsBuilder<'t>() =
 
 let vars<'t> = VarsBuilder<'t>()
 
-type Timestamp<'t> = float<ms> * Var<'t> list
+type Timestamp<'t> = float * Var<'t> list
 
 module Timestamps =
     let duration (ts : Timestamp<'t> list) =
-        ts |> List.map fst |> List.maxOrDefault 0.<ms>
+        ts |> List.map fst |> List.maxOrDefault 0.
 
     let delay delay (ts : Timestamp<'t> list) : Timestamp<'t> list =
         if ts |> List.isEmpty
@@ -176,7 +173,7 @@ module Timestamps =
                     prev + (key.Value - prev) * easedProgression
                 {| StartTime = startTime; EndTime = endTime
                    Value = key.Value; ValueFunc = valueFunc |}, (endTime, key.Value)
-            ) (0.<ms>, (snd keys.Head).Value)
+            ) (0., (snd keys.Head).Value)
             |> fst
         fun t ->
             let key = keys |> List.tryFind (fun key -> key.StartTime <= t && t < key.EndTime)
@@ -192,12 +189,12 @@ module Timestamps =
     let calculate (initials : Map<'t, float>) (ts : Timestamp<'t> list) =
         let initials = [ for KeyValue (var, value) in initials -> var, { Value = value; Easing = Linear } ]
         let ts =
-            match ts |> List.tryFind (fun (t, _) -> t = 0.<ms>) with
+            match ts |> List.tryFind (fun (t, _) -> t = 0.) with
             | Some (t, vars) ->
                 let unset = initials |> List.filter (fun (v, _) -> not (vars |> List.exists (fun (v', _) -> v = v')))
-                (t, unset @ vars)::(ts |> List.filter (fun (t, _) -> t <> 0.<ms>))
+                (t, unset @ vars)::(ts |> List.filter (fun (t, _) -> t <> 0.))
             | None -> 
-                (0.<ms>, initials)::ts
+                (0., initials)::ts
         ts
         |> getVariables
         |> List.map (fun var -> var, getKeys ts var |> keysToFunction)
@@ -250,7 +247,7 @@ module Timeline =
         if i1 = i2 then
             let initial = Timestamps.combine t1.Initial t2.Initial
             let l1, l2 = loopDuration t1, loopDuration t2
-            let loopDur = if l1 = 0.<ms> || l2 = 0.<ms> then max l1 l2 else Math.lcm l1 l2
+            let loopDur = if l1 = 0. || l2 = 0. then max l1 l2 else Math.lcm l1 l2
             let loop = 
                 Timestamps.combine
                     (t1.Loop |> Timestamps.repeat (int (loopDur / l1)))
@@ -262,14 +259,14 @@ module Timeline =
                 then (t2, i2), (t1, i1)
                 else (t1, i1), (t2, i2)
             let ll, ls = loopDuration long, loopDuration short
-            let shortLoopRepeatInitial = if ls = 0.<ms> then 0 else int (ceil ((il - is) / ls))
-            let shortLoopShift = if ls = 0.<ms> then 0.<ms> else (il - is) % ls
+            let shortLoopRepeatInitial = if ls = 0. then 0 else int (ceil ((il - is) / ls))
+            let shortLoopShift = if ls = 0. then 0. else (il - is) % ls
             let initial = 
                 let shortInitialFill = short.Loop |> Timestamps.delay is |> Timestamps.repeat shortLoopRepeatInitial
                 Timestamps.combine
                     long.Initial
                     (short.Initial |> Timestamps.combine shortInitialFill |> Timestamps.truncate il)
-            let loopDur = if ll = 0.<ms> || ls = 0.<ms> then max ll ls else Math.lcm ll ls
+            let loopDur = if ll = 0. || ls = 0. then max ll ls else Math.lcm ll ls
             let loop =
                 Timestamps.combine
                     (long.Loop |> Timestamps.repeat (int (loopDur / ll)))
@@ -290,8 +287,8 @@ module Timeline =
             if t < initialDur then 
                 match initialFuncs |> Map.tryFind var with
                 | Some f -> f t
-                | None -> loopFuncs.[var] 0.<ms>
-            elif loopDur > 0.<ms> then
+                | None -> loopFuncs.[var] 0.
+            elif loopDur > 0. then
                 let t = (t - initialDur) % loopDur
                 loopFuncs.[var] t
             else
@@ -305,10 +302,8 @@ type TimelineBuilder(?direction, ?loop) =
         []
     member __.Yield (ts : Timestamp<'t>) = 
         [ ts ]
-    member this.Yield ((t, var) : float * Var<'t> list) =
-        this.Yield ((LanguagePrimitives.FloatWithMeasure t, var))
     member this.Yield ((t, var) : int * Var<'t> list) = 
-        this.Yield ((ms (float t), var))
+        this.Yield ((float t, var))
     member __.Delay (f) = 
         f()
     member __.Combine (t1 : Timestamp<'t> list, t2) = 
@@ -336,8 +331,8 @@ let timeline' (direction, loop) = TimelineBuilder (direction, loop)
 
 module Animation =
     type AnimationDuration = 
-        | FixedDuration of float<ms> 
-        | InfiniteDuration of initialBlock : float<ms> * loop : float<ms>
+        | FixedDuration of float 
+        | InfiniteDuration of initialBlock : float * loop : float
 
     let isInfinite = function
         | InfiniteDuration _ -> true
@@ -364,7 +359,7 @@ type Animation<'t when 't : comparison>(timeline : Timeline<'t>, initials : Map<
         |> List.distinct
     member val Duration = 
         let id, ld = Timeline.initialDuration timeline, Timeline.loopDuration timeline
-        if ld = 0.<ms>
+        if ld = 0.
         then Animation.FixedDuration id
         else Animation.InfiniteDuration (id, ld)
     member __.Item (var) = 
@@ -373,10 +368,8 @@ type Animation<'t when 't : comparison>(timeline : Timeline<'t>, initials : Map<
 type AnimationBuilder<'t when 't : comparison>() =
     member __.Zero () =
         timeline.Zero () |> timeline.Run
-    member __.Yield ((delay, timeline) : float<ms> * Timeline<'t>) =
+    member __.Yield ((delay, timeline) : float * Timeline<'t>) =
         timeline |> Timeline.delay delay
-    member this.Yield ((delay, timeline) : float * Timeline<'t>) =
-        this.Yield ((LanguagePrimitives.FloatWithMeasure delay, timeline))
     member this.Yield ((delay, timeline) : int * Timeline<'t>) =
         this.Yield ((float delay, timeline))
     member __.Yield (timeline : Timeline<'t>) =
@@ -397,14 +390,14 @@ let animationSingle (tl : Timeline<'t>) = animation.Yield (tl) |> animation.Run
 
 type IAnimationValueProvider<'t when 't : comparison> =
     abstract member Item : 't -> float
-    abstract member Function : 't -> (float<ms> -> float)
+    abstract member Function : 't -> (float -> float)
 
 type Scene<'t, 'r when 't : comparison> =
     { Title : string
       EnterAnimation : Animation<'t>
       RunAnimation : Animation<'t>
       LeaveAnimation : Animation<'t>
-      Render : 'r -> IAnimationValueProvider<'t> -> float<ms> -> unit }
+      Render : 'r -> IAnimationValueProvider<'t> -> float -> unit }
 
 type SceneBuilder<'t, 'r when 't : comparison>(title : string) =
     let zeroAnimation = animation.Zero () |> animation<'t>.Run
@@ -453,7 +446,7 @@ type SceneBuilder<'t, 'r when 't : comparison>(title : string) =
             |> Map.ofList
         let reverseInitials vars (anim : Animation<'t>) =
             vars
-            |> Seq.map (fun var -> var, anim.[var] 0.<ms>)
+            |> Seq.map (fun var -> var, anim.[var] 0.)
             |> Map.ofSeq
         let runAnimation = scene.RunAnimation.WithInitials (initials scene.EnterAnimation)
         let leaveAnimation = scene.LeaveAnimation.WithInitials (initials runAnimation)
@@ -501,11 +494,11 @@ module Scene =
         getAnimationRenderFunction r (fun t var -> scene.LeaveAnimation.[var] t) scene
 
     let runAnimationLoopRender render =
-        let mutable start = 0.<ms>
+        let mutable start = 0.
         let rec run render gt = 
-            render (if start = 0.<ms> then start <- gt; 0.<ms> else gt - start)
-            window.requestAnimationFrame (ms >> run render) |> ignore
-        window.requestAnimationFrame (ms >> run render) |> ignore
+            render (if start = 0. then start <- gt; 0. else gt - start)
+            window.requestAnimationFrame (run render) |> ignore
+        window.requestAnimationFrame (run render) |> ignore
        
     let runAnimationLoop r scene =
         let render = getRenderFunction true r scene
@@ -523,20 +516,20 @@ module Preview =
     open Fable.React.Standard
 
     type SceneStage = Enter | Run | Leave
-    type Playing = Playing of lastFrameTime : float<ms> | Paused
+    type Playing = Playing of lastFrameTime : float | Paused
 
     type PreviewState<'t, 'r when 't : comparison> =
         { CurrentScene : Scene<'t, 'r>
           CurrentSceneIndex : int
           SceneStage : SceneStage
-          Time : float<ms>
+          Time : float
           Playing : Playing }
 
     let encodePreviewState state =
         Encode.object [
             "currentSceneIndex", Encode.int state.CurrentSceneIndex
             "sceneStage", Encode.Auto.generateEncoder<SceneStage>() state.SceneStage
-            "time", Encode.float (float state.Time)
+            "time", Encode.float state.Time
         ]
 
     let decodePreviewState (scenes : Scene<'t, 'r> list)=
@@ -545,14 +538,14 @@ module Preview =
             { CurrentScene = scenes.[index]
               CurrentSceneIndex = index
               SceneStage = get.Required.Field "sceneStage" (Decode.Auto.generateDecoder<SceneStage>())
-              Time = get.Required.Field "time" Decode.float |> ms
+              Time = get.Required.Field "time" Decode.float
               Playing = Paused }
        
     type PreviewMessage<'t, 'r when 't : comparison> =
         | SetScene of int * Scene<'t, 'r>
         | SetStage of SceneStage
-        | SetTime of float<ms>
-        | AnimationFrameGranted of time : float<ms>
+        | SetTime of float
+        | AnimationFrameGranted of time : float
         | StartPlaying
         | PausePlaying
 
@@ -596,14 +589,14 @@ module Preview =
             | Leave -> model.CurrentScene.LeaveAnimation.Duration |> Animation.singleDuration
         let requestAnimationFrameCmd = Cmd.ofSub (fun dispatch ->
             window.requestAnimationFrame (fun t ->
-                dispatch (AnimationFrameGranted (ms t))
+                dispatch (AnimationFrameGranted t)
             ) |> ignore
         )
         let defaultState = 
             { CurrentScene = scenes |> List.head
               CurrentSceneIndex = 0
               SceneStage = Enter
-              Time = 0.<ms>
+              Time = 0.
               Playing = Paused }, Cmd.none
         let init () = 
             let hash = window.location.hash.TrimStart '#' |> window.atob
@@ -619,9 +612,9 @@ module Preview =
         let update msg model =
             match msg with
             | SetScene (i, scene) -> 
-                { model with CurrentScene = scene; CurrentSceneIndex = i; Time = 0.<ms> }, Cmd.none
+                { model with CurrentScene = scene; CurrentSceneIndex = i; Time = 0. }, Cmd.none
             | SetStage stage -> 
-                { model with SceneStage = stage; Time = 0.<ms> }, Cmd.none
+                { model with SceneStage = stage; Time = 0. }, Cmd.none
             | SetTime time -> 
                 { model with Time = time; Playing = Paused }, Cmd.none
             | AnimationFrameGranted time ->
@@ -637,7 +630,7 @@ module Preview =
             | StartPlaying ->
                 { model with 
                     Playing = Playing (Fable.Core.JsInterop.emitJsExpr () "performance.now()") 
-                    Time = if model.Time = maxTime model then 0.<ms> else model.Time }
+                    Time = if model.Time = maxTime model then 0. else model.Time }
                 , requestAnimationFrameCmd
             | PausePlaying ->
                 { model with Playing = Paused }, Cmd.none
@@ -655,7 +648,7 @@ module Preview =
                     Type "range"
                     Min 0.; Max (maxTime model)
                     Value model.Time
-                    OnChange (fun ev -> dispatch (SetTime (ms (ev.target :?> HTMLInputElement).valueAsNumber)))
+                    OnChange (fun ev -> dispatch (SetTime (ev.target :?> HTMLInputElement).valueAsNumber))
                     Style [ Width "100%" ] ]
                 match model.Playing with
                 | Playing _ -> dispatchButton PausePlaying "Pause" []

@@ -203,7 +203,7 @@ let arrow = scene "test-Arrow" {
             "arrowErase" => (1, EaseInSine)
         }
         4000 => []
-    } |> Timeline.delay 1000.<ms>)
+    } |> Timeline.delay 1000.)
 
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.background (rgb (0, 0, 0))

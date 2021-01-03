@@ -1,6 +1,7 @@
 module Render
 
 open FSharp.Data.UnitSystems.SI.UnitSymbols
+[<Measure>] type ms
 
 open Animation
 open Browser
@@ -67,11 +68,11 @@ let runRender scene =
     let render = 
         let r = Scene.getRenderFunction false ctx scene
         fun (t : float<ms>) ->
-            r t
+            r (float t)
             let image = ctx.getImageData (0., 0., canvas.width, canvas.height)
             image.data
     let dt : float<ms> = 1000.<ms/s> / settings.Framerate
-    let dur = Scene.singleDuration scene
+    let dur = LanguagePrimitives.FloatWithMeasure (Scene.singleDuration scene)
     let timestamps = [ 0.<ms> .. dt .. (dur + dt) ]
     let frameCount = timestamps |> List.length |> string
     let ffInput = ffmpegRawInput settings |> window.encodeURIComponent
