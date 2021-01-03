@@ -67,7 +67,7 @@ module FFmpeg =
         match ctx.Request.Query.TryGet "ffInput", ctx.Request.Query.TryGet "ffOutput" with
         | [ input ], output when output.Length > 0 -> 
             async {
-                let ffargs = sprintf "%s -i pipe: %s" input (output |> String.concat " ")
+                let ffargs = sprintf "-hide_banner %s -i pipe: %s" input (output |> String.concat " ")
                 use ffmpeg = run ffmpegPath ffargs outputDir
                 ffmpeg.OutputDataReceived.Add (fun output ->
                     printfn "FFmpeg out: %s" output.Data
