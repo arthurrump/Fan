@@ -393,15 +393,17 @@ type IAnimationValueProvider<'t when 't : comparison> =
     abstract member Function : 't -> (float -> float)
 
 type Scene<'t, 'r when 't : comparison> =
-    { EnterAnimation : Animation<'t>
+    { Title : string
+      EnterAnimation : Animation<'t>
       RunAnimation : Animation<'t>
       LeaveAnimation : Animation<'t>
       Render : 'r -> IAnimationValueProvider<'t> -> float -> unit }
 
-type SceneBuilder<'t, 'r when 't : comparison>() =
+type SceneBuilder<'t, 'r when 't : comparison>(title : string) =
     let zeroAnimation = animation.Zero () |> animation<'t>.Run
     member __.Zero () = 
-        { EnterAnimation = zeroAnimation
+        { Title = title
+          EnterAnimation = zeroAnimation
           RunAnimation = zeroAnimation
           LeaveAnimation = zeroAnimation
           Render = fun _ _ _ -> () }
@@ -457,7 +459,7 @@ type SceneBuilder<'t, 'r when 't : comparison>() =
             RunAnimation = runAnimation
             LeaveAnimation = leaveAnimation }
 
-let scene<'t, 'r when 't : comparison> = SceneBuilder<'t, 'r>()
+let scene<'t, 'r when 't : comparison> title = SceneBuilder<'t, 'r> (title)
 
 module Scene =
     let getAnimationRenderFunction r anim scene =
@@ -658,7 +660,7 @@ module Preview =
                 ]
                 p [] [
                     for i, scene in scenes |> List.indexed do
-                        dispatchButton (SetScene (i, scene)) i [ if model.CurrentSceneIndex = i then FontWeight "bold" ]
+                        dispatchButton (SetScene (i, scene)) $"{i}: {scene.Title}" [ if model.CurrentSceneIndex = i then FontWeight "bold" ]
                 ]
             ]
         Program.mkProgram init update view

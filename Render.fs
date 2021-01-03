@@ -32,7 +32,9 @@ let defaultSettings =
       Framerate = 30.</s> }
 
 let private ffmpegRawInput settings =
-    [ // Force the input format to raw video
+    [ // Force overwriting files
+      "-y"
+      // Force the input format to raw video
       "-f"; "rawvideo" 
       // The raw data is in RGBA format, 4 bytes per pixel
       "-pixel_format"; "rgba" 
@@ -74,7 +76,7 @@ let runRender scene =
     let timestamps = [ 0.<ms> .. dt .. (dur + dt) ]
     let frameCount = timestamps |> List.length |> string
     let ffInput = ffmpegRawInput settings |> window.encodeURIComponent
-    let ffOutput = ffmpegProres4444Output "video" |> window.encodeURIComponent
+    let ffOutput = ffmpegProres4444Output scene.Title |> window.encodeURIComponent
     let ws = WebSocket.Create ($"ws://localhost:5000?ffInput=%s{ffInput}&ffOutput=%s{ffOutput}")
     ws.onmessage <- fun ev -> 
         printfn "WebSocket: %s" (unbox ev.data)

@@ -27,7 +27,7 @@ let serifFont size = sprintf "%ipx 'CMU Serif', serif" size
 let mathFont size = sprintf "%ipx 'CMU Serif', math" size
 let codeFont size = sprintf "%ipx Consolas, monospace" size
 
-let intro = scene {
+let intro = scene "intro" {
     run (timeline {
         0 => vars {
             "slash" => 0
@@ -129,7 +129,7 @@ let node name x y align opacity (ctx : CanvasRenderingContext2D) =
     ctx.drawText (name, textX, textY, opacity)
     ctx.restore ()
 
-let category = scene {
+let category = scene "test-category" {
     enter (animation {
         fadeIn 1000 Linear "ObjectVoid"
         fadeIn 1000 Linear "ObjectUnit"
@@ -172,7 +172,7 @@ let drawLanguageIndicator lang progress (ctx : CanvasRenderingContext2D) =
     ctx.drawText (lang, 50., ctx.height - 50., progress)
     ctx.restore ()
 
-let types = scene {
+let types = scene "types" {
     enter (animation {
         0 => fadeIn 1000 EaseOutQuad "enter"
     })
@@ -196,7 +196,7 @@ let types = scene {
     )
 }
 
-let boolSet = scene {
+let boolSet = scene "boolSet" {
     enter (animation {
         0 => fadeIn 750 Linear "title"
         500 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
@@ -227,7 +227,7 @@ let boolSet = scene {
     )
 }
 
-let intSet = scene {
+let intSet = scene "intSet" {
     enter (animation {
         0 => fadeIn 750 Linear "title"
         500 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
@@ -263,7 +263,7 @@ let intSet = scene {
     )
 }
 
-let intRange = scene {
+let intRange = scene "intRange" {
     enter (animation {
         0 => fadeIn 1000 Linear "range"
     })
@@ -285,7 +285,7 @@ let intRange = scene {
     )
 }
 
-let stringSet = scene {
+let stringSet = scene "stringSet" {
     enter (animation {
         0 => fadeIn 750 Linear "title"
     })
@@ -318,7 +318,7 @@ let stringSet = scene {
     )
 }
 
-let unitSet = scene {
+let unitSet = scene "unitSet" {
     enter (animation {
         0 => fadeIn 750 Linear "title"
         500 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
@@ -355,7 +355,7 @@ let unitSet = scene {
     )
 }
 
-let voidIsUnit = scene {
+let voidIsUnit = scene "voidIsUnit" {
     // TODO: text morph
     run (animation {
         0 => fadeIn 1000 Linear "code"
@@ -392,7 +392,7 @@ let voidIsUnit = scene {
     )
 }
 
-let voidSet = scene {
+let voidSet = scene "voidSet" {
     enter (animation {
         0 => fadeIn 750 Linear "title"
         500 => fromTo 0 (2. * Math.PI) 1000 EaseInQuad "circle"
@@ -417,7 +417,7 @@ let voidSet = scene {
     )
 }
 
-let voidOO = scene {
+let voidOO = scene "voidOO" {
     enter (animation {
         0 => fadeIn 1000 Linear "code"
     })
@@ -467,7 +467,7 @@ let func startX startY endX endY curve progressIn progressOut (ctx : CanvasRende
         ctx.arrow (startX, startY, endX, endY, curve, progressIn, progressOut)
         ctx.restore ()
 
-let typeSetsFunctions = scene {
+let typeSetsFunctions = scene "typeSetsFunctions" {
     enter (animation {
         0 => fadeIn 1000 Linear "init"
     })
@@ -512,7 +512,7 @@ let typeSetsFunctions = scene {
     )
 }
 
-let haskellToInt = scene {
+let haskellToInt = scene "haskellToInt" {
     enter (animation {
         0 => fadeIn 1000 Linear "init"
     })
@@ -531,7 +531,7 @@ let haskellToInt = scene {
     )
 }
 
-let setDefinesFunc = scene {
+let setDefinesFunc = scene "setDefinesFunc" {
     enter (animation {
         0 => fadeIn 1000 Linear "init"
     })
@@ -584,7 +584,7 @@ let setDefinesFunc = scene {
     )
 }
 
-let sideEffect = scene {
+let sideEffect = scene "sideEffect" {
     enter (animation {
         0 => fadeIn 1000 Linear "init"
     })

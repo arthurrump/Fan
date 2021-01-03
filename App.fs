@@ -58,7 +58,7 @@ module Cloud =
 
 type AnimationVars = SunRadius | SunRayLength | SunRayRotation | CloudX
 
-let sunshine = scene {
+let sunshine = scene "test-sunshine" {
     run (animation {
         timeline' (Alternate, Infinite) {
             0 => vars {
@@ -111,7 +111,7 @@ let sunshine = scene {
     )
 }
 
-let square = scene {
+let square = scene "test-square" {
     enter (timeline' (Alternate, Repeat 3) {
         100 => vars {
             "rectSize" => 0
@@ -179,7 +179,7 @@ let grid size style (ctx : CanvasRenderingContext2D) =
         ctx.fillText (string i, size / 10., i - (size / 10.))
     ctx.restore ()
 
-let arrow = scene {
+let arrow = scene "test-Arrow" {
     enter (timeline {
         0 => vars {
             "gridOpacity" => 0
@@ -225,7 +225,7 @@ let arrow = scene {
     )
 }
 
-let helloWorld = scene {
+let helloWorld = scene "test-helloWorld" {
     run (timeline' (Alternate, Infinite) {
         1000 => vars {
             "progress" => 0
@@ -245,7 +245,7 @@ let helloWorld = scene {
     )
 }
 
-let haskell = scene {
+let haskell = scene "test-haskell" {
     run (timeline' (Alternate, Infinite) {
         1000 => vars {
             "progress" => 0
