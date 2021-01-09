@@ -1,4 +1,4 @@
-﻿module App
+module App
 
 open Animation
 open Canvas
@@ -288,6 +288,6 @@ CTP.scenes
     render ctx tl t
     ctx.restore ()
 ))
-|> List.head
-|> Render.runRender
-//|> Preview.runPreview ctx "app"
+// |> List.head
+// |> Render.runRender
+|> Preview.runPreview ctx "app"
