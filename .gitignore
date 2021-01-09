@@ -5,6 +5,7 @@ dist
 .fable/
 .cache/
 *.fs.js
+*.fs.js.map
 
 ## Visual Studio Code
 .vscode/*
