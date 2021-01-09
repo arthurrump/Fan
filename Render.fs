@@ -74,16 +74,31 @@ let runRender scene =
     let dt : float<ms> = 1000.<ms/s> / settings.Framerate
     let dur = LanguagePrimitives.FloatWithMeasure (Scene.singleDuration scene)
     let timestamps = [ 0.<ms> .. dt .. (dur + dt) ]
-    let frameCount = timestamps |> List.length |> string
+    let frameCount = timestamps |> List.length
     let ffInput = ffmpegRawInput settings |> window.encodeURIComponent
     let ffOutput = ffmpegProres4444Output scene.Title |> window.encodeURIComponent
     let ws = WebSocket.Create ($"ws://localhost:5000?ffInput=%s{ffInput}&ffOutput=%s{ffOutput}")
+    let wsProcessor = MailboxProcessor.Start(fun proc -> 
+        let rec loop nextFrame = async {
+            let! frame = proc.Receive ()
+            let frame = min frame (frameCount - 1)
+            printfn "Rendering frames %i to %i" nextFrame frame
+            for t in timestamps.[nextFrame .. frame] do
+                let buffer = render t
+                ws.send buffer
+            if frame >= frameCount - 1 then
+                printfn "Done. Closing websocket."
+                ws.close (1000)
+                return ()
+            else
+                return! loop (frame + 1)
+        }
+        loop 0
+    )
+    let bufferSize = int (1.5 * settings.Framerate)
     ws.onmessage <- fun ev -> 
-        printfn "WebSocket: %s" (unbox ev.data)
+        let frame = int (unbox ev.data)
+        wsProcessor.Post (frame + bufferSize)
     ws.onopen <- fun _ ->
-        printfn "WebSocket opened, rendering %s frames" frameCount
-        for t in timestamps do
-            let buffer = render t
-            ws.send buffer
-        ws.close (1000)
-    ()
+        printfn "WebSocket opened, rendering %i frames" frameCount
+        wsProcessor.Post bufferSize
