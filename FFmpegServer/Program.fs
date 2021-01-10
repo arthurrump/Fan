@@ -7,6 +7,7 @@ open FSharp.Control.Websockets
 
 open System
 open System.Buffers
+open System.Collections.Generic
 open System.Diagnostics
 open System.IO
 open System.Threading
@@ -26,6 +27,10 @@ module Extensions =
             if list |> List.isEmpty
             then [ value ]
             else list
+
+    module Seq = 
+        let limit count =
+            Seq.indexed >> Seq.takeWhile (fun (index, _) -> index < count) >> Seq.map snd
 
     type IQueryCollection with
         member this.TryGet key =
@@ -47,9 +52,32 @@ module WebSocket =
                 do! next ()
         }
 
+module ProgressUI =
+    type UI = MailboxProcessor<string * (int * int)>
+    let createUI listeningUrl =
+        MailboxProcessor.Start (fun proc -> 
+            let progress = Dictionary<string, int * int> ()
+            let rec loop () =
+                async {
+                    let! (file, p) = proc.Receive ()
+                    progress.[file] <- p
+                    Console.Clear ()
+                    printfn "Listening on %s" listeningUrl
+                    if (progress.Count > 0) then
+                        let sorted = progress |> Seq.sortByDescending (fun pair -> float (fst pair.Value) / float (snd pair.Value))
+                        let keyLength = progress.Keys |> Seq.map String.length |> Seq.max
+                        let progressBarLength = Console.WindowWidth - keyLength - 3
+                        for KeyValue (key, (f, t)) in sorted |> Seq.limit (Console.WindowHeight - 1) do
+                            let progBar = String.replicate (int (float progressBarLength * float f / float t)) "#"
+                            printf "%-*s [%-*s]" keyLength key progressBarLength progBar
+                    return! loop ()
+                }
+            loop ()
+        )
+
 module FFmpeg =
     let run path args workingdir =
-        printfn "Starting FFmpeg with args: %s" args
+        // printfn "Starting FFmpeg with args: %s" args
         ProcessStartInfo ( 
             fileName = path,
             arguments = args,
@@ -61,22 +89,26 @@ module FFmpeg =
             RedirectStandardError = true )
         |> Process.Start
 
-    let handleSocket ffmpegPath outputDir (ctx : HttpContext) (ws : WebSocket) =
+    let handleSocket (ui : ProgressUI.UI) ffmpegPath ffargs outputDir (ctx : HttpContext) (ws : WebSocket) =
         let bufferPool = ArrayPool<byte>.Shared
         let bufferSize = 16 * 1024
-        match ctx.Request.Query.TryGet "ffInput", ctx.Request.Query.TryGet "ffOutput" with
-        | [ input ], output when output.Length > 0 -> 
+        let query = ctx.Request.Query.TryGet
+        match query "frameCount", query "name", query "ffInput", query "ffOutput" with
+        | [ frameCount ], [ name ], [ input ], output when output.Length > 0 -> 
             async {
-                let ffargs = sprintf "-hide_banner %s -i pipe: %s" input (output |> String.concat " ")
+                let frameCount = Int32.Parse frameCount
+                ui.Post (name, (0, frameCount))
+                let ffargs = sprintf "%s-hide_banner %s -i pipe: %s" ffargs input (output |> String.concat " ")
                 use ffmpeg = run ffmpegPath ffargs outputDir
-                ffmpeg.OutputDataReceived.Add (fun output ->
-                    printfn "FFmpeg out: %s" output.Data
-                )
+                // ffmpeg.OutputDataReceived.Add (fun output ->
+                //     printfn "FFmpeg out: %s" output.Data
+                // )
                 ffmpeg.BeginOutputReadLine ()
                 ffmpeg.ErrorDataReceived.Add (fun error ->
-                    printfn "FFmpeg error: %s" error.Data
+                    // printfn "FFmpeg error: %s" error.Data
                     if error.Data <> null && error.Data.StartsWith "frame=" then
                         let frame = error.Data.Substring("frame=".Length).TrimStart().Split(' ').[0]
+                        ui.Post (name, (Int32.Parse frame, frameCount))
                         let bytes = Text.Encoding.UTF8.GetBytes frame
                         WebSocket.asyncSend ws (ArraySegment bytes) WebSocketMessageType.Text true |> Async.Start
                 )
@@ -93,27 +125,29 @@ module FFmpeg =
                 bufferPool.Return (bufferArray, true)
                 ffmpeg.StandardInput.BaseStream.Close ()
                 do! ffmpeg.WaitForExitAsync () |> Async.AwaitTask
-                printfn "Finished encoding."
+                // printfn "Finished encoding."
             }
         | _ -> 
             async {
                 ctx.Response.StatusCode <- 400
-                do! ctx.Response.WriteAsync ("Query parameter 'ffInput' is required exactly once, 'ffOutput' at least once.") |> Async.AwaitTask
+                do! ctx.Response.WriteAsync ("Query parameters 'frameCount', 'name' and 'ffInput' are required exactly once, 'ffOutput' at least once.") |> Async.AwaitTask
             }
 
-    let websocket ffmpegPath outputDir = WebSocket.handle (handleSocket ffmpegPath outputDir)
+    let websocket ui ffmpegPath ffargs outputDir = WebSocket.handle (handleSocket ui ffmpegPath ffargs outputDir)
 
 module Program =
     type Arguments =
         | [<AltCommandLine("-p")>] Port of port : int
         | [<AltCommandLine("-o"); Unique>] Output of path : string
         | [<AltCommandLine("-f"); Unique>] FFmpeg of path : string
+        | FFargs of args : string
         interface IArgParserTemplate with
             member this.Usage =
                 match this with
                 | Port _ -> "specify the port the server listens on (default: 5000)."
                 | Output _ -> "specify the output folder (defaults to current working directory)."
                 | FFmpeg _ -> "specify the path to the FFmpeg executable."
+                | FFargs _ -> "extra arguments to pass to FFmpeg at the start of the argument list."
 
     let fuse (middlware : HttpContext -> (unit -> Async<unit>) -> Async<unit>) (app : IApplicationBuilder) =
         app.Use(fun env next ->
@@ -150,6 +184,10 @@ module Program =
         let ffmpegPath =
             args.TryPostProcessResult (FFmpeg, parseFFmpeg)
             |> Option.defaultValue "ffmpeg"
+        let ffargs =
+            args.TryGetResult (FFargs)
+            |> Option.map (fun args -> args + " ")
+            |> Option.defaultValue ""
 
         let config = 
             ConfigurationBuilder()
@@ -157,6 +195,8 @@ module Program =
                 .Build()
 
         let urls = ports |> List.map (fun p -> $"http://localhost:%i{p}") |> List.toArray
+
+        let ui = ProgressUI.createUI (urls |> String.concat ", ")
 
         use host =
             Host.CreateDefaultBuilder()
@@ -170,7 +210,7 @@ module Program =
                         .UseConfiguration(config)
                         .Configure(fun app ->
                             app.UseWebSockets()
-                            |> fuse (FFmpeg.websocket ffmpegPath outputDirectory)
+                            |> fuse (FFmpeg.websocket ui ffmpegPath ffargs outputDirectory)
                             |> ignore )
                         |> ignore )
                 .Build()
@@ -178,8 +218,10 @@ module Program =
         printfn "Starting FFmpegServer."
 
         host.Start ()
-        printfn "Server started. Listening on %s" (urls |> String.concat ", ")
-        printfn "Press Ctrl+C to shut down."
+
+        Console.Clear ()
+        printfn "Listening on %s" (urls |> String.concat ", ")
+        printfn "Waiting for requests. Press Ctrl+C to shut down."
 
         host.WaitForShutdown ()
         0

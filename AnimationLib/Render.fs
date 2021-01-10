@@ -21,6 +21,7 @@ let defaultSettings =
 
 type FFmpegSettings =
     { ServerAddress : string
+      Filename : string
       InputArgs : string
       OutputArgs : string }
 
@@ -33,7 +34,8 @@ let runFFmpegSceneRender settings ffSettings renderer progress scene =
     let frameCount = timestamps |> List.length
     let ffInput = ffSettings.InputArgs |> window.encodeURIComponent
     let ffOutput = ffSettings.OutputArgs |> window.encodeURIComponent
-    let ws = WebSocket.Create ($"ws://{ffSettings.ServerAddress}?ffInput=%s{ffInput}&ffOutput=%s{ffOutput}")
+    let filename = ffSettings.Filename |> window.encodeURIComponent
+    let ws = WebSocket.Create ($"ws://{ffSettings.ServerAddress}?frameCount=%i{frameCount}&name=%s{filename}&ffInput=%s{ffInput}&ffOutput=%s{ffOutput}")
     let wsProcessor = MailboxProcessor.Start(fun proc -> 
         let rec loop nextFrame = async {
             let! frame = proc.Receive ()
@@ -114,6 +116,7 @@ module CanvasRender =
 
     let canvasToProres server settings filename =
         { ServerAddress = server
+          Filename = filename
           InputArgs = ffmpegRawCanvasInput settings
           OutputArgs = ffmpegProres4444Output filename }
 
