@@ -1,14 +1,11 @@
 module App
 
-open Animation
+open Animation.Animation
 open Canvas
 open System
 open Fable.Core
 open Browser.Dom
 open Browser.Types
-
-let cnv = document.getElementById "animation" :?> HTMLCanvasElement
-let ctx = cnv.getContext_2d ()
 
 module Sun =
     type Sun =
@@ -58,58 +55,58 @@ module Cloud =
 
 type AnimationVars = SunRadius | SunRayLength | SunRayRotation | CloudX
 
-let sunshine = scene "test-sunshine" {
-    run (animation {
-        timeline' (Alternate, Infinite) {
-            0 => vars {
-                SunRadius => 100
-                SunRayLength => 50
-            }
-            600 => vars {
-                SunRadius => 102
-            }
-            1000 => vars {
-                SunRayLength => (100, EaseOutBack)
-            }
-        }
-        timeline' (Normal, Infinite) {
-            0 => vars {
-                SunRayRotation => 0
-                // CloudX => -200
-            }
-            3000 => vars {
-                SunRayRotation => 0.5 * Math.PI
-                //CloudX => (cnv.width + 100., EaseOutSine)
-            }
-        }
-        2000 => timeline' (Alternate, Repeat 3) {
-            0 => vars {
-                CloudX => -200
-            }
-            2000 => vars {
-                CloudX => (cnv.width + 100., EaseOutSine)
-            }
-        }
-    })
-    render (fun (ctx : CanvasRenderingContext2D) tl ->
-        ctx.fillStyle <- U3.Case1 "rgba(10, 100, 200, 1)"
-        ctx.clearRect (0., 0., cnv.width, cnv.height)
+// let sunshine = scene "test-sunshine" {
+//     run (animation {
+//         timeline' (Alternate, Infinite) {
+//             0 => vars {
+//                 SunRadius => 100
+//                 SunRayLength => 50
+//             }
+//             600 => vars {
+//                 SunRadius => 102
+//             }
+//             1000 => vars {
+//                 SunRayLength => (100, EaseOutBack)
+//             }
+//         }
+//         timeline' (Normal, Infinite) {
+//             0 => vars {
+//                 SunRayRotation => 0
+//                 // CloudX => -200
+//             }
+//             3000 => vars {
+//                 SunRayRotation => 0.5 * Math.PI
+//                 //CloudX => (cnv.width + 100., EaseOutSine)
+//             }
+//         }
+//         2000 => timeline' (Alternate, Repeat 3) {
+//             0 => vars {
+//                 CloudX => -200
+//             }
+//             2000 => vars {
+//                 CloudX => (cnv.width + 100., EaseOutSine)
+//             }
+//         }
+//     })
+//     render (fun (ctx : CanvasRenderingContext2D) tl ->
+//         ctx.fillStyle <- U3.Case1 "rgba(10, 100, 200, 1)"
+//         ctx.clearRect (0., 0., cnv.width, cnv.height)
 
-        ctx.save ()
-        ctx.translate (250., 200.)
-        ctx |> Sun.draw {
-            Sun.Radius = tl.[SunRadius]
-            Sun.RayLength = tl.[SunRayLength]
-            Sun.RayRotation = tl.[SunRayRotation]
-        }
-        ctx.restore ()
+//         ctx.save ()
+//         ctx.translate (250., 200.)
+//         ctx |> Sun.draw {
+//             Sun.Radius = tl.[SunRadius]
+//             Sun.RayLength = tl.[SunRayLength]
+//             Sun.RayRotation = tl.[SunRayRotation]
+//         }
+//         ctx.restore ()
 
-        ctx.save ()
-        ctx.translate (tl.[CloudX], 350.)
-        ctx |> Cloud.draw { Cloud.Size = 2. }
-        ctx.restore ()
-    )
-}
+//         ctx.save ()
+//         ctx.translate (tl.[CloudX], 350.)
+//         ctx |> Cloud.draw { Cloud.Size = 2. }
+//         ctx.restore ()
+//     )
+// }
 
 let square = scene "test-square" {
     enter (timeline' (Alternate, Repeat 3) {
@@ -143,7 +140,7 @@ let square = scene "test-square" {
         }
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
-        ctx.clearRect (0., 0., cnv.width, cnv.height)
+        ctx.clear ()
         let offset = tl.["rectOffset"]
         let size = tl.["rectSize"]
         let center = offset + size / 2.
@@ -272,14 +269,6 @@ let haskell = scene "test-haskell" {
     )
 }
 
-// let ind =
-//     match Int32.TryParse(window.location.hash.TrimStart('#')) with
-//     | true, i when i >= 0 -> i
-//     | true, i -> scenes.Length + i
-//     | false, _ -> 0
-
-// window.onhashchange <- fun _ -> window.location.reload (true)
-
 CTP.scenes
 |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.clear ()
@@ -288,6 +277,4 @@ CTP.scenes
     render ctx tl t
     ctx.restore ()
 ))
-// |> List.head
-// |> Render.runRender
-|> Preview.runPreview ctx "app"
+|> Animation.App.Main.runCanvasApp { Width = 1920; Height = 1080; BackgroundColor = "#000" } "app"

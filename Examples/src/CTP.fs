@@ -2,7 +2,7 @@ module CTP
 
 open System
 open Browser.Types
-open Animation
+open Animation.Animation
 open Canvas
 
 module CodeColors =

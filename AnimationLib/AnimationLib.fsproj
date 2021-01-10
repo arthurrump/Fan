@@ -7,6 +7,9 @@
     <Compile Include="Canvas.fs" />
     <Compile Include="Animation.fs" />
     <Compile Include="Render.fs" />
+    <Compile Include="App/Preview.fs" />
+    <Compile Include="App/Render.fs" />
+    <Compile Include="App/App.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Fable.Browser.Dom" Version="2.2.0" />
