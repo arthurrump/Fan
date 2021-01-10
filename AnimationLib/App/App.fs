@@ -1,5 +1,8 @@
 module Animation.App.Main
 
+open Animation.Animation
+open Animation.Render
+
 open System
 open Browser.Dom
 open Browser.Types
@@ -7,9 +10,11 @@ open Fable.Core.JsInterop
 
 open Elmish
 open Elmish.React
+open Fable.React
+open Fable.React.Props
 open Thoth.Json
 
-let throttle t (f : 'a -> unit) =
+let private throttle t (f : 'a -> unit) =
     let mutable timeout = None
     let mutable lastArg = None
     let rec exec x =
@@ -25,28 +30,115 @@ let throttle t (f : 'a -> unit) =
         | Some _ -> lastArg <- Some x
         | None -> exec x
 
-let withHashState program =
+let private withHashState encode program =
     let updateHistory = throttle 500 (fun hash -> history.replaceState ((), url = "#" + window.btoa hash))
     let urlUpdate update msg model =
-        let (newModel : Preview.PreviewState<'t, 'r>, cmd) = update msg model
-        let hash = Encode.toString 0 (newModel.Encode ())
+        let (newModel, cmd) = update msg model
+        let hash = Encode.toString 0 (encode newModel)
         updateHistory hash
         newModel, cmd
     Program.map id urlUpdate id id id program
 
-let runApp preview containerId scenes =
-    let init () = 
-        let hash = window.location.hash.TrimStart '#' |> window.atob
-        if String.IsNullOrWhiteSpace hash then 
-            Preview.defaultState scenes
-        else 
-            match Decode.fromString (Preview.PreviewState.Decoder scenes) hash with
-            | Ok state -> 
-                state, Cmd.none
-            | Error msg ->
-                console.error ("Error parsing state hash:", msg)
-                Preview.defaultState scenes
+type private Page<'t, 'r when 't : comparison> =
+    | Preview of Preview.State<'t, 'r>
+    | Render of Render.State<'t, 'r>
 
+    member this.Encode () =
+        match this with
+        | Preview state -> Encode.object [ "page", Encode.string "Preview"; "state", state.Encode () ]
+        | Render _ -> Encode.object [ "page", Encode.string "Render" ]
+
+    static member Decoder (settings, scenes) =
+        Decode.field "page" Decode.string
+        |> Decode.andThen (function
+            | "Preview" -> 
+                Decode.field "state" (Preview.State.Decoder scenes)
+                |> Decode.map Preview
+            | "Render" -> 
+                Decode.succeed (Render.init (settings, scenes))
+                |> Decode.map (fst >> Render)
+            | _ -> 
+                Decode.fail "Invalid value for field 'page'")
+
+type private State<'t, 'r when 't : comparison> =
+    { RenderSettings : RenderSettings
+      Scenes : Scene<'t, 'r> list
+      Page : Page<'t, 'r> }
+
+    member this.Encode () =
+        this.Page.Encode ()
+
+    static member Decoder (renderSettings, scenes) =
+        Page<'t, 'r>.Decoder (renderSettings, scenes)
+        |> Decode.map (fun page ->
+            { RenderSettings = renderSettings
+              Scenes = scenes
+              Page = page }
+        )
+
+type private Message<'t, 'r when 't : comparison> =
+    | PreviewMsg of Preview.Message<'t, 'r>
+    | RenderMsg of Render.Message<'t, 'r>
+    | GotoPreview
+    | GotoRender
+
+let private init (renderSettings, scenes : Scene<'t, 'r> list) : State<'t, 'r> * Cmd<Message<'t, 'r>> =
+    let state, cmd = Preview.init scenes
+    { RenderSettings = renderSettings
+      Scenes = scenes
+      Page = Preview state }
+    , cmd |> Cmd.map RenderMsg
+
+let private initFromHash<'t, 'r when 't : comparison> (renderSettings, scenes : Scene<'t, 'r> list) =
+    let hash = window.location.hash.TrimStart '#' |> window.atob
+    if String.IsNullOrWhiteSpace hash then 
+        init (renderSettings, scenes)
+    else 
+        match Decode.fromString (State<'t, 'r>.Decoder (renderSettings, scenes)) hash with
+        | Ok state -> 
+            state, Cmd.none
+        | Error msg ->
+            console.error ("Error parsing state hash:", msg)
+            init (renderSettings, scenes)
+
+let private update msg model =
+    match model.Page, msg with
+    | Preview state, PreviewMsg msg ->
+        let state, cmd = Preview.update msg state
+        { model with Page = Preview state }
+        , cmd |> Cmd.map PreviewMsg
+    | Preview _, GotoRender ->
+        let state, cmd = Render.init (model.RenderSettings, model.Scenes)
+        { model with Page = Render state }
+        , cmd |> Cmd.map RenderMsg
+    | Render state, RenderMsg msg ->
+        let state, cmd = Render.update msg state
+        { model with Page = Render state }
+        , cmd |> Cmd.map RenderMsg
+    | Render _, GotoPreview ->
+        let state, cmd = Preview.init (model.Scenes)
+        { model with Page = Preview state }
+        , cmd |> Cmd.map PreviewMsg
+    | _ ->
+        model
+        , Cmd.none
+
+let private view drawingCtx setPreviewVisible model dispatch =
+    div [] [
+        nav [] [
+            button [ OnClick (fun _ -> dispatch GotoPreview) ] [ str "Preview" ]
+            button [ OnClick (fun _ -> dispatch GotoRender) ] [ str "Render" ]
+        ]
+        match model.Page with
+        | Preview model ->
+            do setPreviewVisible true
+            Preview.view drawingCtx model (PreviewMsg >> dispatch)
+        | Render model ->
+            do setPreviewVisible false
+            Render.view model (RenderMsg >> dispatch)
+    ]
+
+let runApp preview containerId renderSettings scenes =
     let style = document.createElement "style"
     style.innerHTML <- """
         :root.scrollbar-hidden {
@@ -69,17 +161,16 @@ let runApp preview containerId scenes =
 
     let appContainerId, drawingCtx, setPreviewVisible = preview (document.getElementById containerId)
 
-    Program.mkProgram (init) (Preview.update) (Preview.view drawingCtx scenes)
-    |> withHashState
+    Program.mkProgram initFromHash update (view drawingCtx setPreviewVisible)
+    |> withHashState (fun x -> x.Encode ())
     |> Program.withReactBatched appContainerId
-    |> Program.run
+    |> Program.runWith (renderSettings, scenes)
 
 type CanvasAppSettings =
-    { Width : int
-      Height : int
+    { RenderSettings : RenderSettings
       BackgroundColor : string }
 
-let runCanvasApp settings =
+let runCanvasApp settings containerId =
     let preview (container : HTMLElement) =
         let id x = 
             if container.id <> null 
@@ -88,8 +179,8 @@ let runCanvasApp settings =
 
         let canvas = document.createElement "canvas" :?> HTMLCanvasElement
         canvas.id <- id "canvas"
-        canvas.width <- float settings.Width
-        canvas.height <- float settings.Height
+        canvas.width <- float settings.RenderSettings.Width
+        canvas.height <- float settings.RenderSettings.Height
         canvas?style?``max-width`` <- "100%"
         canvas?style?margin <- 0
         canvas?style?padding <- 0
@@ -98,7 +189,7 @@ let runCanvasApp settings =
         let setCanvasVisible visible =
             if visible
             then canvas?style?display <- "unset"
-            else canvas?style?display <- "hidden"
+            else canvas?style?display <- "none"
 
         let div = document.createElement "div"
         div?style?margin <- 0
@@ -112,4 +203,4 @@ let runCanvasApp settings =
 
         div.id, ctx, setCanvasVisible
 
-    runApp preview
+    runApp preview containerId settings.RenderSettings

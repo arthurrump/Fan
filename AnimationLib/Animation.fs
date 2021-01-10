@@ -31,6 +31,7 @@ module Map =
     let keys map =
         map |> Map.toList |> List.map fst
 
+[<CustomEquality; NoComparison>]
 type Easing = 
     | Linear
     | EaseInSine | EaseOutSine | EaseInOutSine
@@ -43,6 +44,13 @@ type Easing =
     | EaseInBack | EaseOutBack | EaseInOutBack
     | EaseInElastic | EaseOutElastic | EaseInOutElastic
     | Custom of (float -> float)
+
+    interface IEquatable<Easing> with
+        member this.Equals (other) =
+            match this, other with
+            | Custom _, _ -> false
+            | _, Custom _ -> false
+            | _ -> this.ToString () = other.ToString ()
 
 // https://easings.net/
 let private easingFunction : Easing -> (float -> float) = 
@@ -364,6 +372,10 @@ type Animation<'t when 't : comparison>(timeline : Timeline<'t>, initials : Map<
     member __.Item (var) = 
         animationFunction.Value var
 
+    interface IEquatable<Animation<'t>> with
+        member this.Equals (other) =
+            this.Timeline = other.Timeline
+
 type AnimationBuilder<'t when 't : comparison>() =
     member __.Zero () =
         timeline.Zero () |> timeline.Run
@@ -391,12 +403,20 @@ type IAnimationValueProvider<'t when 't : comparison> =
     abstract member Item : 't -> float
     abstract member Function : 't -> (float -> float)
 
+[<CustomEquality; NoComparison>]
 type Scene<'t, 'r when 't : comparison> =
     { Title : string
       EnterAnimation : Animation<'t>
       RunAnimation : Animation<'t>
       LeaveAnimation : Animation<'t>
       Render : 'r -> IAnimationValueProvider<'t> -> float -> unit }
+    
+    interface IEquatable<Scene<'t, 'r>> with
+        member this.Equals (other) =
+            this.Title = other.Title
+            && this.EnterAnimation = other.EnterAnimation
+            && this.RunAnimation = other.RunAnimation
+            && this.LeaveAnimation = other.LeaveAnimation
 
 type SceneBuilder<'t, 'r when 't : comparison>(title : string) =
     let zeroAnimation = animation.Zero () |> animation<'t>.Run

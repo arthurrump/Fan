@@ -24,7 +24,7 @@ type FFmpegSettings =
       InputArgs : string
       OutputArgs : string }
 
-let runFFmpegSceneRender settings ffSettings renderer scene =
+let runFFmpegSceneRender settings ffSettings renderer progress scene =
     let dt : float<ms> = 1000.<ms/s> / settings.Framerate
     let dur = Scene.singleDuration scene |> ms
     let sceneRenderFunc r = Scene.getRenderFunction false r scene
@@ -39,11 +39,13 @@ let runFFmpegSceneRender settings ffSettings renderer scene =
             let! frame = proc.Receive ()
             let frame = min frame (frameCount - 1)
             printfn "Rendering frames %i to %i" nextFrame frame
+            progress (nextFrame, frameCount)
             for t in timestamps.[nextFrame .. frame] do
                 let buffer = render t
                 ws.send buffer
             if frame >= frameCount - 1 then
                 printfn "Done. Closing websocket."
+                progress (frameCount, frameCount)
                 ws.close (1000)
                 return ()
             else
@@ -57,6 +59,7 @@ let runFFmpegSceneRender settings ffSettings renderer scene =
         wsProcessor.Post (frame + bufferSize)
     ws.onopen <- fun _ ->
         printfn "WebSocket opened, rendering %i frames" frameCount
+        progress (0, frameCount)
         wsProcessor.Post bufferSize
 
 let ffmpegProres4444Output outFile =
@@ -114,6 +117,6 @@ module CanvasRender =
           InputArgs = ffmpegRawCanvasInput settings
           OutputArgs = ffmpegProres4444Output filename }
 
-    let runFFmpegCanvasRender server settings scene =
+    let runFFmpegCanvasRender server settings progress scene =
         let ffSettings = canvasToProres server settings scene.Title
-        runFFmpegSceneRender settings ffSettings (rawCanvasRenderer settings) scene
+        runFFmpegSceneRender settings ffSettings (rawCanvasRenderer settings) progress scene

@@ -1,10 +1,13 @@
 module App
 
+open FSharp.Data.UnitSystems.SI.UnitSymbols
+
 open Animation.Animation
+open Animation.App.Main
 open Canvas
+
 open System
 open Fable.Core
-open Browser.Dom
 open Browser.Types
 
 module Sun =
@@ -269,6 +272,13 @@ let haskell = scene "test-haskell" {
     )
 }
 
+let settings =
+    { RenderSettings =
+        { Width = 1920
+          Height = 1080
+          Framerate = 25.</s> }
+      BackgroundColor = "#000" }
+
 CTP.scenes
 |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.clear ()
@@ -277,4 +287,4 @@ CTP.scenes
     render ctx tl t
     ctx.restore ()
 ))
-|> Animation.App.Main.runCanvasApp { Width = 1920; Height = 1080; BackgroundColor = "#000" } "app"
+|> runCanvasApp settings "app"

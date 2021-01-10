@@ -13,8 +13,9 @@ open Thoth.Json
 type SceneStage = Enter | Run | Leave
 type Playing = Playing of lastFrameTime : float | Paused
 
-type PreviewState<'t, 'r when 't : comparison> =
-    { CurrentScene : Scene<'t, 'r>
+type State<'t, 'r when 't : comparison> =
+    { Scenes : Scene<'t, 'r> list
+      CurrentScene : Scene<'t, 'r>
       SceneStage : SceneStage
       Time : float
       Playing : Playing }
@@ -29,7 +30,8 @@ type PreviewState<'t, 'r when 't : comparison> =
     static member Decoder (scenes : Scene<'t, 'r> list) =
         Decode.object <| fun get ->
             let sceneTitle = get.Required.Field "currentSceneTitle" Decode.string
-            { CurrentScene = 
+            { Scenes = scenes
+              CurrentScene = 
                 scenes 
                 |> List.tryFind (fun s -> s.Title = sceneTitle) 
                 |> Option.defaultValue (scenes |> List.head)
@@ -37,7 +39,7 @@ type PreviewState<'t, 'r when 't : comparison> =
               Time = get.Required.Field "time" Decode.float
               Playing = Paused }
    
-type PreviewMessage<'t, 'r when 't : comparison> =
+type Message<'t, 'r when 't : comparison> =
     | SetScene of Scene<'t, 'r>
     | SetStage of SceneStage
     | SetTime of float
@@ -45,7 +47,7 @@ type PreviewMessage<'t, 'r when 't : comparison> =
     | StartPlaying
     | PausePlaying
 
-let private renderScene ctx (model : PreviewState<'t, 'r>) =
+let private renderScene ctx (model : State<'t, 'r>) =
     let render =
         match model.SceneStage with
         | Enter -> Scene.getEnterRenderFunction
@@ -59,15 +61,16 @@ let private maxTime model =
     | Run -> model.CurrentScene.RunAnimation.Duration |> Animation.singleDuration
     | Leave -> model.CurrentScene.LeaveAnimation.Duration |> Animation.singleDuration
 
-let private requestAnimationFrameCmd<'t, 'r when 't : comparison> : Cmd<PreviewMessage<'t, 'r>> = 
+let private requestAnimationFrameCmd<'t, 'r when 't : comparison> : Cmd<Message<'t, 'r>> = 
     Cmd.ofSub (fun dispatch ->
         window.requestAnimationFrame (fun t ->
             dispatch (AnimationFrameGranted t)
         ) |> ignore
     )
 
-let defaultState scenes = 
-    { CurrentScene = scenes |> List.head
+let init scenes = 
+    { Scenes = scenes
+      CurrentScene = scenes |> List.head
       SceneStage = Enter
       Time = 0.
       Playing = Paused }, Cmd.none
@@ -98,7 +101,7 @@ let update msg model =
     | PausePlaying ->
         { model with Playing = Paused }, Cmd.none
 
-let view ctx (scenes : Scene<'t, 'r> list) (model : PreviewState<'t, 'r>) dispatch =
+let view ctx (model : State<'t, 'r>) dispatch =
     let dispatchButton message value style =
         input [ 
             Type "button"
@@ -123,7 +126,7 @@ let view ctx (scenes : Scene<'t, 'r> list) (model : PreviewState<'t, 'r>) dispat
             dispatchButton (SetStage Leave) "Leave" [ if model.SceneStage = Leave then FontWeight "bold" ]
         ]
         p [] [
-            for i, scene in scenes |> List.indexed do
+            for i, scene in model.Scenes |> List.indexed do
                 dispatchButton (SetScene scene) $"{i}: {scene.Title}" [ if model.CurrentScene.Title = scene.Title then FontWeight "bold" ]
         ]
     ]
