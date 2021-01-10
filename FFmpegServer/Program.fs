@@ -61,13 +61,13 @@ module FFmpeg =
             RedirectStandardError = true )
         |> Process.Start
 
-    let handleSocket ffmpegPath outputDir (ctx : HttpContext) (ws : WebSocket) =
+    let handleSocket ffmpegPath ffargs outputDir (ctx : HttpContext) (ws : WebSocket) =
         let bufferPool = ArrayPool<byte>.Shared
         let bufferSize = 16 * 1024
         match ctx.Request.Query.TryGet "ffInput", ctx.Request.Query.TryGet "ffOutput" with
         | [ input ], output when output.Length > 0 -> 
             async {
-                let ffargs = sprintf "-hide_banner %s -i pipe: %s" input (output |> String.concat " ")
+                let ffargs = sprintf "%s-hide_banner %s -i pipe: %s" ffargs input (output |> String.concat " ")
                 use ffmpeg = run ffmpegPath ffargs outputDir
                 ffmpeg.OutputDataReceived.Add (fun output ->
                     printfn "FFmpeg out: %s" output.Data
@@ -101,19 +101,21 @@ module FFmpeg =
                 do! ctx.Response.WriteAsync ("Query parameter 'ffInput' is required exactly once, 'ffOutput' at least once.") |> Async.AwaitTask
             }
 
-    let websocket ffmpegPath outputDir = WebSocket.handle (handleSocket ffmpegPath outputDir)
+    let websocket ffmpegPath ffargs outputDir = WebSocket.handle (handleSocket ffmpegPath ffargs outputDir)
 
 module Program =
     type Arguments =
         | [<AltCommandLine("-p")>] Port of port : int
         | [<AltCommandLine("-o"); Unique>] Output of path : string
         | [<AltCommandLine("-f"); Unique>] FFmpeg of path : string
+        | FFargs of args : string
         interface IArgParserTemplate with
             member this.Usage =
                 match this with
                 | Port _ -> "specify the port the server listens on (default: 5000)."
                 | Output _ -> "specify the output folder (defaults to current working directory)."
                 | FFmpeg _ -> "specify the path to the FFmpeg executable."
+                | FFargs _ -> "extra arguments to pass to FFmpeg at the start of the argument list."
 
     let fuse (middlware : HttpContext -> (unit -> Async<unit>) -> Async<unit>) (app : IApplicationBuilder) =
         app.Use(fun env next ->
@@ -150,6 +152,10 @@ module Program =
         let ffmpegPath =
             args.TryPostProcessResult (FFmpeg, parseFFmpeg)
             |> Option.defaultValue "ffmpeg"
+        let ffargs =
+            args.TryGetResult (FFargs)
+            |> Option.map (fun args -> args + " ")
+            |> Option.defaultValue ""
 
         let config = 
             ConfigurationBuilder()
@@ -170,7 +176,7 @@ module Program =
                         .UseConfiguration(config)
                         .Configure(fun app ->
                             app.UseWebSockets()
-                            |> fuse (FFmpeg.websocket ffmpegPath outputDirectory)
+                            |> fuse (FFmpeg.websocket ffmpegPath ffargs outputDirectory)
                             |> ignore )
                         |> ignore )
                 .Build()
