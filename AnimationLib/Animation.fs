@@ -504,16 +504,34 @@ module Scene =
         Animation.singleDuration (scene.EnterAnimation.Duration)
         + Animation.singleDuration (scene.RunAnimation.Duration)
         + Animation.singleDuration (scene.LeaveAnimation.Duration)
-        
+    
+    let private animFunc (anim : Animation<'t>) = fun t var -> anim.[var] t
+
     let getEnterRenderFunction r scene =
-        getAnimationRenderFunction r (fun t var -> scene.EnterAnimation.[var] t) scene
+        getAnimationRenderFunction r (animFunc scene.EnterAnimation) scene
     let getRunRenderFunction r scene =
-        getAnimationRenderFunction r (fun t var -> scene.RunAnimation.[var] t) scene
+        getAnimationRenderFunction r (animFunc scene.RunAnimation) scene
     let getLeaveRenderFunction r scene =
-        getAnimationRenderFunction r (fun t var -> scene.LeaveAnimation.[var] t) scene
+        getAnimationRenderFunction r (animFunc scene.LeaveAnimation) scene
 
     let withRender render scene =
         { scene with Render = fun r tl t -> render r tl t scene.Render }
 
     let mapTitle f scene =
         { scene with Title = f scene.Title }
+
+    let getSplitRenderFunctions scene =
+        let splitRenderAnimation title (anim : Animation<'t>) =
+            [ match anim.Duration with
+              | Animation.FixedDuration dur ->
+                  if dur > 0. then
+                      title, (fun r -> getAnimationRenderFunction r (animFunc anim) scene), dur
+              | Animation.InfiniteDuration (initial, loop) ->
+                  if initial > 0. then 
+                      $"%s{title}_initial", (fun r -> getAnimationRenderFunction r (animFunc anim) scene), initial
+                  if loop > 0. then 
+                      $"%s{title}_loop", (fun r -> getAnimationRenderFunction r (fun t -> animFunc anim (t - initial)) scene), loop
+            ]
+        [ yield! splitRenderAnimation "0_enter" scene.EnterAnimation
+          yield! splitRenderAnimation "1_run_1" scene.RunAnimation
+          yield! splitRenderAnimation "2_leave" scene.LeaveAnimation ]

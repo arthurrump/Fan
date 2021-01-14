@@ -91,33 +91,37 @@ module Rendering =
         { Settings : RenderingSettings
           Queue : Scene<'t, 'r> list
           Current : Scene<'t, 'r> option
-          Progress : int * int
+          Progress : float * float
           Finished : Scene<'t, 'r> list }
 
     type Message =
         | Start
-        | ProgressUpdate of frame : int * total : int
+        | ProgressUpdate of time : float * total : float
+        | RenderFinished
 
     let init (settings, queue) =
         { Settings = settings
           Queue = queue
           Current = None
-          Progress = 0, 0
+          Progress = 0., 0.
           Finished = [] }
         , Cmd.ofMsg Start
 
     let private renderSceneCmd settings scene =
         Cmd.ofSub (fun dispatch ->
-            let progress (frame, total) = dispatch (ProgressUpdate (frame, total))
-            CanvasRender.runFFmpegCanvasRender settings.Server settings.Settings progress scene
+            let progress (time, total) = dispatch (ProgressUpdate (time, total))
+            async {
+                do! CanvasRender.runFFmpegCanvasRender settings.Server settings.Settings progress scene
+                dispatch RenderFinished
+            } |> Async.StartImmediate
         )
 
     let update msg model =
         match msg with
-        | ProgressUpdate (frame, total) when frame = total ->
+        | RenderFinished ->
             { model with 
                 Current = None
-                Progress = 0, 0 
+                Progress = 0., 0. 
                 Finished = 
                     match model.Current with
                     | Some cur -> cur :: model.Finished
@@ -131,7 +135,7 @@ module Rendering =
             { model with
                 Current = Some scene
                 Queue = model.Queue |> List.tail
-                Progress = 0, 0 }
+                Progress = 0., 0. }
             , renderSceneCmd model.Settings scene
         | Start ->
             model
@@ -144,7 +148,7 @@ module Rendering =
             | Some scene ->
                 h1 [] [ str "Rendering "; str scene.Title ]
                 span [] [ 
-                    str (sprintf "%i/%i" (fst model.Progress) (snd model.Progress))
+                    str (sprintf "%.0f/%.0f" (fst model.Progress) (snd model.Progress))
                     progress [ Value (fst model.Progress); Max (snd model.Progress) ] []
                 ]
             if not (model.Queue |> List.isEmpty) then 

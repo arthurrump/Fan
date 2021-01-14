@@ -24,43 +24,81 @@ type FFmpegSettings =
       InputArgs : string
       OutputArgs : string }
 
-let runFFmpegSceneRender settings ffSettings renderer progress scene =
+let runFFmpegRender settings ffSettings render duration progress =
     let dt : float<ms> = 1000.<ms/s> / settings.Framerate
-    let dur = Scene.singleDuration scene |> ms
-    let sceneRenderFunc r = Scene.getRenderFunction false r scene
-    let render = renderer sceneRenderFunc
+    let dur = duration |> ms
     let timestamps = [ 0.<ms> .. dt .. (dur + dt) ]
     let frameCount = timestamps |> List.length
     let ffInput = ffSettings.InputArgs |> window.encodeURIComponent
     let ffOutput = ffSettings.OutputArgs |> window.encodeURIComponent
-    let ws = WebSocket.Create ($"ws://{ffSettings.ServerAddress}?ffInput=%s{ffInput}&ffOutput=%s{ffOutput}")
-    let wsProcessor = MailboxProcessor.Start(fun proc -> 
-        let rec loop nextFrame = async {
-            let! frame = proc.Receive ()
-            let frame = min frame (frameCount - 1)
-            printfn "Rendering frames %i to %i" nextFrame frame
-            progress (nextFrame, frameCount)
-            for t in timestamps.[nextFrame .. frame] do
-                let buffer = render t
-                ws.send buffer
-            if frame >= frameCount - 1 then
-                printfn "Done. Closing websocket."
-                progress (frameCount, frameCount)
-                ws.close (1000)
-                return ()
-            else
-                return! loop (frame + 1)
-        }
-        loop 0
+    Async.FromContinuations (fun (success, exc, cancel) -> 
+        let ws = WebSocket.Create ($"ws://{ffSettings.ServerAddress}?ffInput=%s{ffInput}&ffOutput=%s{ffOutput}")
+        let wsProcessor = MailboxProcessor.Start(fun proc -> 
+            let rec loop nextFrame = async {
+                let! frame = proc.Receive ()
+                let frame = min frame (frameCount - 1)
+                printfn "Rendering frames %i to %i" nextFrame frame
+                progress (float (float nextFrame * dt))
+                for t in timestamps.[nextFrame .. frame] do
+                    let buffer = render t
+                    ws.send buffer
+                if frame >= frameCount - 1 then
+                    printfn "Done. Closing websocket."
+                    progress (float (dur + dt))
+                    ws.close (1000)
+                    success ()
+                    return ()
+                else
+                    return! loop (frame + 1)
+            }
+            loop 0
+        )
+        let bufferSize = int (1.5 * settings.Framerate)
+        ws.onmessage <- fun ev -> 
+            let frame = int (unbox ev.data)
+            wsProcessor.Post (frame + bufferSize)
+        ws.onopen <- fun _ ->
+            printfn "WebSocket opened, rendering %i frames" frameCount
+            progress 0.
+            wsProcessor.Post bufferSize
     )
-    let bufferSize = int (1.5 * settings.Framerate)
-    ws.onmessage <- fun ev -> 
-        let frame = int (unbox ev.data)
-        wsProcessor.Post (frame + bufferSize)
-    ws.onopen <- fun _ ->
-        printfn "WebSocket opened, rendering %i frames" frameCount
-        progress (0, frameCount)
-        wsProcessor.Post bufferSize
+
+type FFmpegSceneSettings = 
+    { ServerAddress : string 
+      InputArgs : string
+      Filename : string
+      VideoOutputArgs : string -> string
+      ImageOutputArgs : string -> string }
+
+let runFFmpegSceneRender settings ffSettings renderer progress scene =
+    async {
+        let sceneRenders = Scene.getSplitRenderFunctions scene
+        let sceneRenders, totalDur = 
+            sceneRenders |> List.mapFold (fun total (t, render, duration) -> (t, render, duration, total), total + duration) 0.
+        for (name, render, duration, totalDurUptoHere) in sceneRenders do
+            let render = renderer render
+            let filename = $"%s{ffSettings.Filename}_%s{name}"
+            let ffSettings =
+                { ServerAddress = ffSettings.ServerAddress
+                  InputArgs = ffSettings.InputArgs
+                  OutputArgs = ffSettings.VideoOutputArgs filename }
+            do! runFFmpegRender settings ffSettings render duration (fun t -> progress (t + totalDurUptoHere, totalDur))
+        let runRender = renderer (fun r -> Scene.getRunRenderFunction r scene)
+        let runDuration = Animation.singleDuration scene.RunAnimation.Duration |> ms
+        let runStartFilename = $"%s{ffSettings.Filename}_1_run_0"
+        let runStartFfSettings =
+            { ServerAddress = ffSettings.ServerAddress
+              InputArgs = ffSettings.InputArgs
+              OutputArgs = ffSettings.ImageOutputArgs runStartFilename }
+        do! runFFmpegRender settings runStartFfSettings runRender 0. (fun _ -> progress (totalDur, totalDur))
+        if runDuration <> 0.<ms> then
+            let runEndFilename = $"%s{ffSettings.Filename}_1_run_2"
+            let runEndFfSettings = 
+                { ServerAddress = ffSettings.ServerAddress
+                  InputArgs = ffSettings.InputArgs
+                  OutputArgs = ffSettings.ImageOutputArgs runEndFilename }
+            do! runFFmpegRender settings runEndFfSettings (fun t -> runRender (t + runDuration)) 0. (fun _ -> progress (totalDur, totalDur))
+    }
 
 let ffmpegProres4444Output outFile =
     [ // Use the prores_ks encoder
@@ -78,7 +116,17 @@ let ffmpegProres4444Output outFile =
       "-timecode"; "10:00:00:00" 
       // Write the output to this file
       $"%s{outFile}.mov"
-    ] |> String.concat " "        
+    ] |> String.concat " "
+
+let ffmpegPngOutput outFile =
+    [ // Use image2 muxer and png encoder
+      "-f"; "image2"
+      "-c:v"; "png"
+      // Only write a single frame
+      "-frames:v"; "1"
+      // File
+      $"%s{outFile}.png" 
+    ] |> String.concat " "
 
 module CanvasRender =
     type [<AllowNullLiteral>] OffscreenCanvas =
@@ -114,8 +162,10 @@ module CanvasRender =
 
     let canvasToProres server settings filename =
         { ServerAddress = server
+          Filename = filename
           InputArgs = ffmpegRawCanvasInput settings
-          OutputArgs = ffmpegProres4444Output filename }
+          VideoOutputArgs = ffmpegProres4444Output
+          ImageOutputArgs = ffmpegPngOutput }
 
     let runFFmpegCanvasRender server settings progress scene =
         let ffSettings = canvasToProres server settings scene.Title
