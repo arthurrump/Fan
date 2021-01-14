@@ -78,9 +78,10 @@ type CanvasRenderingContext2D with
         let textHeight =
             let longText = String [|'0'..'z'|]
             let m = ctx.measureText(longText) :?> ExtendedTextMetrics
-            if not (isNullOrUndefined m.fontBoundingBoxAscent) 
-            then m.fontBoundingBoxAscent + m.fontBoundingBoxDescent
-            elif not (isNullOrUndefined m.actualBoundingBoxAscent)
+            // Disable this one to unify rendering across Firefox and Chromium
+            // if not (isNullOrUndefined m.fontBoundingBoxAscent) 
+            // then m.fontBoundingBoxAscent + m.fontBoundingBoxDescent
+            if not (isNullOrUndefined m.actualBoundingBoxAscent)
             then m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
             else ctx.measureText("GMX").width / 3.
         textHeight * ctx.lineHeight
