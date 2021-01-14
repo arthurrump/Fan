@@ -175,6 +175,7 @@ type Message<'t, 'r when 't : comparison> =
     | RenderingMsg of Rendering.Message
 
 let init (renderSettings, scenes) =
+    let scenes = scenes |> List.mapi (fun i -> Scene.mapTitle (fun t -> $"%02i{i}_%s{t}"))
     let state, cmd, extCmd = Selecting.init scenes
     { RenderSettings = renderSettings
       Page = Selecting state }

@@ -514,3 +514,6 @@ module Scene =
 
     let withRender render scene =
         { scene with Render = fun r tl t -> render r tl t scene.Render }
+
+    let mapTitle f scene =
+        { scene with Title = f scene.Title }
