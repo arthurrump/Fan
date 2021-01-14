@@ -86,6 +86,8 @@ let intro = scene "intro" {
     )
 }
 
+let v_intro = [ intro ]
+
 let inline fadeIn duration easing property = timeline {
     0 => vars { property => 0. }
     (float duration) => vars { property => (1., easing) }
@@ -356,20 +358,22 @@ let unitSet = scene "unitSet" {
 }
 
 let voidIsUnit = scene "voidIsUnit" {
-    // TODO: text morph
+    enter (animation {
+        0 => fadeIn 750 Linear "code"
+        0 => fadeIn 750 Linear "code_void"
+    })
     run (animation {
-        0 => fadeIn 1000 Linear "code"
+        0 => fadeIn 750 Linear "class_unit"
+        1000 => fadeOut 750 Linear "code_void"
+        1250 => fadeIn 750 Linear "code_unit"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
         ctx.font <- codeFont 70
         ctx.textBaseline <- "top"
-        ctx.drawLongText([
-            [ (keyword, "void "); (funcDecl, "Ignore"); (operator, "<"); (typeDecl, "T"); (operator, ">(")
-              (typeDecl, "T "); (var, "value"); (operator, ")") ]
-            [ (operator, "{") ]
-            [ (keyword, "  "); (control, "return"); (operator, ";") ]
-            [ (operator, "}") ]
-        ], 100., 100., tl.["code"])
 
         ctx.drawLongText([
             [ (keyword, "public sealed class "); (typeDecl, "Unit") ] 
@@ -378,15 +382,27 @@ let voidIsUnit = scene "voidIsUnit" {
               (keyword, "new "); (typeDecl, "Unit"); (operator, "();") ]
             [ (keyword, "  private "); (funcDecl, "Unit"); (operator, "() { }") ]
             [ (operator, "}") ]
-        ], 100., 450., tl.["code"])
+        ], 100., 100., tl.["class_unit"])
 
         ctx.drawLongText([
-            [ (typeDecl, "Unit "); (funcDecl, "Ignore"); (operator, "<"); (typeDecl, "T"); (operator, ">(")
+            [ (keyword, "     "); (funcDecl, "Ignore"); (operator, "<"); (typeDecl, "T"); (operator, ">(")
               (typeDecl, "T "); (var, "value"); (operator, ")") ]
             [ (operator, "{") ]
-            [ (keyword, "  "); (control, "return "); (var, "Unit"); (operator, "."); (var, "Instance"); (operator, ";") ]
+            [ (keyword, "  "); (control, "return"); ]
             [ (operator, "}") ]
-        ], 100., 800., tl.["code"])
+        ], 100., 520., tl.["code"])
+
+        ctx.drawLongText([
+            [ (keyword, "void") ]
+            [ ]
+            [ (text, "        "); (operator, ";") ]
+        ], 100., 520., tl.["code_void"])
+
+        ctx.drawLongText([
+            [ (typeDecl, "Unit") ]
+            [ ]
+            [ (text, "         "); (var, "Unit"); (operator, "."); (var, "Instance"); (operator, ";") ]
+        ], 100., 520., tl.["code_unit"])
 
         ctx |> drawLanguageIndicator "C#" tl.["code"]
     )
@@ -469,23 +485,23 @@ let func startX startY endX endY curve progressIn progressOut (ctx : CanvasRende
 
 let typeSetsFunctions = scene "typeSetsFunctions" {
     enter (animation {
-        0 => fadeIn 1000 Linear "init"
+        0 => fadeIn 750 Linear "init"
     })
     run (animation {
         // TODO: create some sort of background animation thing for this
-        timeline' (Alternate, Infinite) {
+        timeline {
             0 => vars { "seed" => 1.1 }
-            5000 => vars { "seed" => 1.4 }
+            11000 => vars { "seed" => 1.4 }
         }
 
-        2000 => fadeIn 1000 EaseOutCubic "intbool"
-        4000 => fadeIn 1000 EaseInCubic "intboolout"
+        500 => fadeIn 750 EaseOutCubic "intbool"
+        5500 => fadeIn 750 EaseInCubic "intboolout"
 
-        6000 => fadeIn 1000 EaseOutCubic "boolint"
-        8000 => fadeIn 1000 EaseInCubic "boolintout"
+        6500 => fadeIn 750 EaseOutCubic "boolint"
+        11000 => fadeIn 750 EaseInCubic "boolintout"
     })
     leave (animation {
-        0 => fadeOut 1000 Linear "init"
+        0 => fadeOut 500 Linear "init"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.setStyle typeDecl
@@ -514,10 +530,10 @@ let typeSetsFunctions = scene "typeSetsFunctions" {
 
 let haskellToInt = scene "haskellToInt" {
     enter (animation {
-        0 => fadeIn 1000 Linear "init"
+        0 => fadeIn 750 Linear "init"
     })
     leave (animation {
-        0 => fadeOut 1000 Linear "opacity"
+        0 => fadeOut 500 Linear "opacity"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.globalAlpha <- tl.["opacity"]
@@ -533,25 +549,25 @@ let haskellToInt = scene "haskellToInt" {
 
 let setDefinesFunc = scene "setDefinesFunc" {
     enter (animation {
-        0 => fadeIn 1000 Linear "init"
+        0 => fadeIn 750 Linear "init"
     })
     run (animation {
-        timeline' (Alternate, Infinite) {
+        timeline {
             0 => vars { "seed" => 1.4 }
-            4000 => vars { "seed" => 2.0 }
+            11000 => vars { "seed" => 1.7 }
         }
 
-        1000 => fadeIn 1000 EaseOutCubic "ignore"
-        3000 => fadeIn 1000 EaseInCubic "ignoreout"
+        1000 => fadeIn 750 EaseOutCubic "ignore"
+        3000 => fadeIn 750 EaseInCubic "ignoreout"
 
-        5000 => fadeIn 1000 EaseOutCubic "absurd"
-        7000 => fadeIn 1000 EaseInCubic "absurdout"
+        5000 => fadeIn 750 EaseOutCubic "absurd"
+        7000 => fadeIn 750 EaseInCubic "absurdout"
 
-        9000 => fadeIn 1000 EaseOutCubic "id"
-        11000 => fadeIn 1000 EaseInCubic "idout"
+        9000 => fadeIn 750 EaseOutCubic "id"
+        11000 => fadeIn 750 EaseInCubic "idout"
     })
     leave (animation {
-        0 => fadeOut 1000 Linear "init"
+        0 => fadeOut 500 Linear "init"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.setStyle typeDecl
@@ -578,7 +594,12 @@ let setDefinesFunc = scene "setDefinesFunc" {
         ctx.save ()
         ctx |> setFuncStyle
         ctx.arcArrow (560., 400., 70., -0.9 * Math.PI + 1.8 * Math.PI * tl.["idout"], -0.9 * Math.PI + 1.8 * Math.PI * tl.["id"])
+
+        ctx.arcArrow (230., 700., 90., 0.1 * Math.PI + 1.8 * Math.PI * tl.["idout"], 0.1 * Math.PI + 1.8 * Math.PI * tl.["id"])
         ctx.arcArrow (240., 700., 70., 0.1 * Math.PI + 1.8 * Math.PI * tl.["idout"], 0.1 * Math.PI + 1.8 * Math.PI * tl.["id"])
+        ctx.arcArrow (250., 700., 50., 0.1 * Math.PI + 1.8 * Math.PI * tl.["idout"], 0.1 * Math.PI + 1.8 * Math.PI * tl.["id"])
+        ctx.arcArrow (260., 700., 30., 0.1 * Math.PI + 1.8 * Math.PI * tl.["idout"], 0.1 * Math.PI + 1.8 * Math.PI * tl.["id"])
+
         ctx.arcArrow (770., 700., 70., -0.9 * Math.PI + 1.8 * Math.PI * tl.["idout"], -0.9 * Math.PI + 1.8 * Math.PI * tl.["id"])
         ctx.restore ()
     )
@@ -586,10 +607,10 @@ let setDefinesFunc = scene "setDefinesFunc" {
 
 let sideEffect = scene "sideEffect" {
     enter (animation {
-        0 => fadeIn 1000 Linear "init"
+        0 => fadeIn 750 Linear "init"
     })
     leave (animation {
-        0 => fadeOut 1000 Linear "opacity"
+        0 => fadeOut 500 Linear "opacity"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.globalAlpha <- tl.["opacity"]
@@ -606,10 +627,24 @@ let sideEffect = scene "sideEffect" {
     )
 }
 
-let scenes =
-    [ intro  
-      // 1: Types and functions
-      types; boolSet; intSet; intRange; stringSet; unitSet; voidIsUnit; voidSet; voidOO
+let whyTypes = scene "whyTypes" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.font <- mathFont 100
+        ctx.setStyle (color "#fff")
+        ctx.drawText ("Correctness", 200., 300., tl.["init"])
+    )
+}
+
+let v01_types = 
+    [ types; boolSet; intSet; intRange; stringSet; unitSet; voidIsUnit; voidSet; voidOO
       typeSetsFunctions; haskellToInt; setDefinesFunc
-      // 2: Why types?
-      sideEffect ]
+      sideEffect
+      whyTypes ]
+
+let scenes = v01_types
