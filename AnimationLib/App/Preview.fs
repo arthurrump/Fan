@@ -46,6 +46,7 @@ type Message<'t, 'r when 't : comparison> =
     | AnimationFrameGranted of time : float
     | StartPlaying
     | PausePlaying
+    | KeyDown of key : string * handle : (unit -> unit)
 
 let private renderScene ctx (model : State<'t, 'r>) =
     let render =
@@ -68,12 +69,24 @@ let private requestAnimationFrameCmd<'t, 'r when 't : comparison> : Cmd<Message<
         ) |> ignore
     )
 
+let private keyEventCmd<'t, 'r when 't : comparison> : Cmd<Message<'t, 'r>> =
+    Cmd.ofSub (fun dispatch ->
+        document.onkeydown <- (fun ev -> 
+            dispatch (KeyDown (ev.key, ev.preventDefault))
+        )
+    )
+
 let init scenes = 
     { Scenes = scenes
       CurrentScene = scenes |> List.head
       SceneStage = Enter
       Time = 0.
-      Playing = Paused }, Cmd.none
+      Playing = Paused }
+    , keyEventCmd
+
+let initDecode scenes =
+    State.Decoder scenes
+    |> Decode.map (fun state -> state, keyEventCmd)
 
 let update msg model =
     match msg with
@@ -100,6 +113,32 @@ let update msg model =
         , requestAnimationFrameCmd
     | PausePlaying ->
         { model with Playing = Paused }, Cmd.none
+    | KeyDown (key, handle) ->
+        let sceneIndexCommand di =
+            model.Scenes 
+            |> List.tryFindIndex (fun s -> s = model.CurrentScene)
+            |> Option.bind (fun ci -> 
+                if ci + di < 0 || ci + di >= model.Scenes.Length 
+                then None 
+                else Some (ci + di) )
+            |> Option.map (fun i -> List.item i model.Scenes)
+            |> Option.map (SetScene >> Cmd.ofMsg)
+            |> Option.defaultValue Cmd.none
+        match key with
+        | "ArrowLeft" -> 
+            handle ()
+            model, sceneIndexCommand -1
+        | "ArrowRight" -> 
+            handle ()
+            model, sceneIndexCommand +1
+        | " " when model.Playing = Paused -> 
+            handle ()
+            model, Cmd.ofMsg StartPlaying
+        | " " when model.Playing <> Paused -> 
+            handle ()
+            model, Cmd.ofMsg PausePlaying
+        | _ -> 
+             model, Cmd.none
 
 let view ctx (model : State<'t, 'r>) dispatch =
     let dispatchButton message value style =

@@ -39,6 +39,12 @@ let private withHashState encode program =
         newModel, cmd
     Program.map id urlUpdate id id id program
 
+type private Message<'t, 'r when 't : comparison> =
+    | PreviewMsg of Preview.Message<'t, 'r>
+    | RenderMsg of Render.Message<'t, 'r>
+    | GotoPreview
+    | GotoRender
+
 type private Page<'t, 'r when 't : comparison> =
     | Preview of Preview.State<'t, 'r>
     | Render of Render.State<'t, 'r>
@@ -52,11 +58,11 @@ type private Page<'t, 'r when 't : comparison> =
         Decode.field "page" Decode.string
         |> Decode.andThen (function
             | "Preview" -> 
-                Decode.field "state" (Preview.State.Decoder scenes)
-                |> Decode.map Preview
+                Decode.field "state" (Preview.initDecode scenes)
+                |> Decode.map (fun (state, cmd) -> Preview state, Cmd.map PreviewMsg cmd)
             | "Render" -> 
-                Decode.succeed (Render.init (settings, scenes))
-                |> Decode.map (fst >> Render)
+                Render.initDecode (settings, scenes)
+                |> Decode.map (fun (state, cmd) -> Render state, Cmd.map RenderMsg cmd)
             | _ -> 
                 Decode.fail "Invalid value for field 'page'")
 
@@ -70,24 +76,19 @@ type private State<'t, 'r when 't : comparison> =
 
     static member Decoder (renderSettings, scenes) =
         Page<'t, 'r>.Decoder (renderSettings, scenes)
-        |> Decode.map (fun page ->
+        |> Decode.map (fun (page, cmd) ->
             { RenderSettings = renderSettings
               Scenes = scenes
               Page = page }
+            , cmd
         )
-
-type private Message<'t, 'r when 't : comparison> =
-    | PreviewMsg of Preview.Message<'t, 'r>
-    | RenderMsg of Render.Message<'t, 'r>
-    | GotoPreview
-    | GotoRender
 
 let private init (renderSettings, scenes : Scene<'t, 'r> list) : State<'t, 'r> * Cmd<Message<'t, 'r>> =
     let state, cmd = Preview.init scenes
     { RenderSettings = renderSettings
       Scenes = scenes
       Page = Preview state }
-    , cmd |> Cmd.map RenderMsg
+    , cmd |> Cmd.map PreviewMsg
 
 let private initFromHash<'t, 'r when 't : comparison> (renderSettings, scenes : Scene<'t, 'r> list) =
     let hash = window.location.hash.TrimStart '#' |> window.atob
@@ -95,8 +96,8 @@ let private initFromHash<'t, 'r when 't : comparison> (renderSettings, scenes : 
         init (renderSettings, scenes)
     else 
         match Decode.fromString (State<'t, 'r>.Decoder (renderSettings, scenes)) hash with
-        | Ok state -> 
-            state, Cmd.none
+        | Ok (state, cmd) -> 
+            state, cmd
         | Error msg ->
             console.error ("Error parsing state hash:", msg)
             init (renderSettings, scenes)

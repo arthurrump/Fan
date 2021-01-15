@@ -7,6 +7,7 @@ open Elmish
 open Fable.React
 open Fable.React.Props
 open Browser.Types
+open Thoth.Json
 
 module Selecting =
     type State<'t, 'r when 't : comparison> =
@@ -184,6 +185,9 @@ let init (renderSettings, scenes) =
     { RenderSettings = renderSettings
       Page = Selecting state }
     , Cmd.batch [ cmd |> Cmd.map SelectingMsg; extCmd |> Cmd.map SelectingExtMsg ]
+
+let initDecode (renderSettings, scenes) =
+    Decode.succeed (init (renderSettings, scenes))
 
 let update msg model =
     let page, cmd =
