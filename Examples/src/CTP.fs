@@ -635,6 +635,7 @@ let whyTypes = scene "whyTypes" {
         0 => fadeOut 500 Linear "opacity"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
         ctx.font <- mathFont 100
         ctx.setStyle (color "#fff")
         ctx.drawText ("Correctness", 200., 300., tl.["init"])
@@ -647,4 +648,45 @@ let v01_types =
       sideEffect
       whyTypes ]
 
-let scenes = v01_types
+let composition = scene "composition" {
+    run (animation {
+        for i in 0 .. 5 ->
+            i * 400 => fromTo -2.5 1. 500 EaseInCubic $"block_%i{i}"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        let block x y width height (colorR, colorG, colorB) =
+            ctx.save ()
+            ctx.lineWidth <- 5.
+            ctx.fillStyle <- rgba (colorR, colorG, colorB, 0.9)
+            ctx.beginPath ()
+            ctx.rect (x + 0.5 * ctx.lineWidth, y + 0.5 * ctx.lineWidth, width - ctx.lineWidth, height - ctx.lineWidth)
+            ctx.fill ()
+            ctx.closePath ()
+            ctx.restore ()
+        
+        let flyUp y progress =
+            ctx.height - ((ctx.height - y) * progress)
+
+        ctx.globalAlpha <- tl.["opacity"]
+
+        ctx.save ()
+        ctx.translate (400., 450.)
+        ctx.rotate (0.25 * Math.PI)
+        ctx.translate (-400., -450.)
+        block (200. * tl.["block_0"]) 200. 200. 300. (200, 200, 70)
+        block 400. (300. * tl.["block_1"]) 100. 200. (30, 180, 60)
+        block 500. (flyUp 300. tl.["block_2"]) 100. 300. (160, 40, 160)
+        block 400. (200. * tl.["block_3"]) 200. 100. (40, 40, 200)
+        block (200. * tl.["block_4"]) 500. 300. 200. (190, 20, 60)
+        block 500. (flyUp 600. tl.["block_5"]) 100. 100. (210, 160, 40)
+        ctx.restore ()
+    )
+}
+
+let v02_category =
+    [ composition ]
+
+let scenes = v02_category
