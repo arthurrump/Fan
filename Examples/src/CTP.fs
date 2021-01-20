@@ -27,6 +27,16 @@ let serifFont size = sprintf "%ipx 'CMU Serif', serif" size
 let mathFont size = sprintf "%ipx 'CMU Serif', math" size
 let codeFont size = sprintf "%ipx Consolas, monospace" size
 
+let inline fadeIn duration easing property = timeline {
+    0 => vars { property => 0. }
+    (float duration) => vars { property => (1., easing) }
+}
+
+let inline fadeOut duration easing property = timeline {
+    0 => vars { property => 1. }
+    (float duration) => vars { property => (0., easing) }
+}
+
 let intro = scene "intro" {
     run (timeline {
         0 => vars {
@@ -86,17 +96,28 @@ let intro = scene "intro" {
     )
 }
 
-let v_intro = [ intro ]
+let endCredits = scene "endCredits" {
+    run (animation {
+        0 => fadeIn 750 Linear "name"
+        500 => fadeIn 750 Linear "url"
+        13000 => fadeOut 500 Linear "opacity" 
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.textBaseline <- "top"
+        ctx.setStyle (color "#fff")
+        ctx.globalAlpha <- tl.["opacity"]
 
-let inline fadeIn duration easing property = timeline {
-    0 => vars { property => 0. }
-    (float duration) => vars { property => (1., easing) }
+        ctx.save ()
+        ctx.translate ((2./3.) * ctx.width, (2./3.) * ctx.height)
+        ctx.font <- codeFont 70
+        ctx.drawText ("Arthur Rump", 0., 0., tl.["name"])
+        ctx.font <- codeFont 32
+        ctx.drawText ("https://arthurrump.com", 0., 1.1 * 70., tl.["url"])
+        ctx.restore ()
+    )
 }
 
-let inline fadeOut duration easing property = timeline {
-    0 => vars { property => 1. }
-    (float duration) => vars { property => (0., easing) }
-}
+let v_general = [ intro; endCredits ]
 
 type TextAlign = 
     | LeftAbove | CenterAbove | RightAbove
@@ -491,14 +512,14 @@ let typeSetsFunctions = scene "typeSetsFunctions" {
         // TODO: create some sort of background animation thing for this
         timeline {
             0 => vars { "seed" => 1.1 }
-            11000 => vars { "seed" => 1.4 }
+            23750 => vars { "seed" => 1.7 }
         }
 
         500 => fadeIn 750 EaseOutCubic "intbool"
-        5500 => fadeIn 750 EaseInCubic "intboolout"
+        11500 => fadeIn 750 EaseInCubic "intboolout"
 
-        6500 => fadeIn 750 EaseOutCubic "boolint"
-        11000 => fadeIn 750 EaseInCubic "boolintout"
+        12750 => fadeIn 750 EaseOutCubic "boolint"
+        23750 => fadeIn 750 EaseInCubic "boolintout"
     })
     leave (animation {
         0 => fadeOut 500 Linear "init"
@@ -554,17 +575,17 @@ let setDefinesFunc = scene "setDefinesFunc" {
     run (animation {
         timeline {
             0 => vars { "seed" => 1.4 }
-            11000 => vars { "seed" => 1.7 }
+            109000 => vars { "seed" => 3.1 }
         }
 
-        1000 => fadeIn 750 EaseOutCubic "ignore"
-        3000 => fadeIn 750 EaseInCubic "ignoreout"
+        0 => fadeIn 750 EaseOutCubic "ignore"
+        28250 => fadeIn 750 EaseInCubic "ignoreout"
 
-        5000 => fadeIn 750 EaseOutCubic "absurd"
-        7000 => fadeIn 750 EaseInCubic "absurdout"
+        30000 => fadeIn 750 EaseOutCubic "absurd"
+        72000 => fadeIn 750 EaseInCubic "absurdout"
 
-        9000 => fadeIn 750 EaseOutCubic "id"
-        11000 => fadeIn 750 EaseInCubic "idout"
+        73500 => fadeIn 750 EaseOutCubic "id"
+        108250 => fadeIn 750 EaseInCubic "idout"
     })
     leave (animation {
         0 => fadeOut 500 Linear "init"
