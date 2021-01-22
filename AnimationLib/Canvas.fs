@@ -49,10 +49,13 @@ let private quadraticProgressPoints fromX fromY cX cY toX toY progressStart prog
 
 let private limit bottom top = max bottom >> min top
 
-let private staggeredProgress stagger length index progress = 
+let staggeredProgress stagger length index progress = 
     if length >= 2
     then limit 0. 1. ((stagger + 1.) * progress - (float index * stagger / float (length - 1)))
     else progress
+
+let stagger total index progress =
+    staggeredProgress 1. total index progress
 
 let circlePoint cX cY radius angle =
     let x = radius * cos(angle) + cX

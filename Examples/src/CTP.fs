@@ -707,7 +707,189 @@ let composition = scene "composition" {
     )
 }
 
-let v02_category =
-    [ composition ]
+let compositionText = scene "compositionText" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.font <- mathFont 100
+        ctx.setStyle (color "#fff")
+        ctx.textBaseline <- "middle"
+        ctx.drawText ("Composition", 140., ctx.height / 2., tl.["init"])
+    )
+}
 
-let scenes = v02_category
+let simpleCategory = scene "simpleCategory" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+        750 => fadeIn 750 EaseOutQuad "initialArrows"
+    })
+    run (animation {
+        0 => fadeIn 750 EaseOutQuad "identity"
+        1000 => fadeIn 750 EaseOutQuad "composition"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+
+        let middle = ctx.height / 3.
+        ctx |> node "" 200. middle CenterUnder tl.["init"]
+        ctx |> node "" 450. middle CenterUnder tl.["init"]
+        ctx |> node "" 700. middle CenterUnder tl.["init"]
+
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+
+        ctx.arrow (235., middle, 415., middle, 0., stagger 2 0 tl.["initialArrows"])
+        ctx.arrow (485., middle, 665., middle, 0., stagger 2 1 tl.["initialArrows"])
+
+        ctx.arcArrow (200., middle + 45., 25., -0.2 * Math.PI, (-0.2 + 1.4 * tl.["identity"]) * Math.PI)
+        ctx.arcArrow (450., middle + 45., 25., -0.2 * Math.PI, (-0.2 + 1.4 * tl.["identity"]) * Math.PI)
+        ctx.arcArrow (700., middle + 45., 25., -0.2 * Math.PI, (-0.2 + 1.4 * tl.["identity"]) * Math.PI)
+
+        ctx.arrow (200., middle - 35., 700., middle - 35., -75., tl.["composition"])
+
+        ctx.setStyle (color "#fff")
+        ctx.font <- mathFont 70
+        ctx.drawText ("1. Identity", 175., ctx.height * (2./3.) - 0.5 * ctx.actualLineHeight, tl.["identity"])
+        ctx.drawText ("2. Composition", 175., ctx.height * (2./3.) + 0.5 * ctx.actualLineHeight, tl.["composition"])
+    )
+}
+
+let jsComposition = scene "jsComposition" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+    })
+    run (animation {
+        0 => fadeIn 750 Linear "composition"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.font <- codeFont 65
+        ctx.textBaseline <- "top"
+
+        ctx.drawLongText([
+            [ (keyword, "function "); (funcDecl, "toInt"); (text, "("); (var, "value"); (text, ") {") ]
+            [ (control, "  return "); (var, "value"); (operator, " ? "); (numberLit, "1"); (operator, " : "); (numberLit, "0"); (text, ";") ]
+            [ (text, "}") ]
+        ], 100., 100., tl.["init"])
+
+        ctx.drawLongText([
+            [ (keyword, "function "); (funcDecl, "toString"); (text, "("); (var, "value"); (text, ") {") ]
+            [ (control, "  return "); (var, "value"); (text, "."); (funcDecl, "toString"); (text, "();") ]
+            [ (text, "}") ]
+        ], 100., 100. + 4. * ctx.actualLineHeight, tl.["init"])
+
+        ctx.drawLongText([
+            [ (funcDecl, "toString"); (text, "("); (funcDecl, "toInt"); (text, "("); (keyword, "true"); (text, "));") ]
+        ], 100., 100. + 8. * ctx.actualLineHeight, tl.["composition"])
+
+        ctx |> drawLanguageIndicator "JavaScript" tl.["init"]
+    )
+}
+
+let haskComposition = scene "haskComposition" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+        200 => fadeIn 650 Linear "composition"
+    })
+    run (animation {
+        0 => fadeOut 750 Linear "composition"
+        250 => fadeIn 750 Linear "pointFreeComposition"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.font <- codeFont 65
+        ctx.textBaseline <- "top"
+
+        ctx.drawLongText([
+            [ (funcDecl, "toInt "); (operator, ":: "); (typeDecl, "Bool"); (operator, " -> "); (typeDecl, "Int") ]
+            [ (text, "toInt False = "); (numberLit, "0") ]
+            [ (text, "toInt True = "); (numberLit, "1") ]
+        ], 100., 100., tl.["init"])
+
+        ctx.drawLongText([
+            [ (funcDecl, "toString "); (operator, ":: "); (typeDecl, "Int"); (operator, " -> "); (typeDecl, "String") ]
+            [ (text, "toString value = show value") ]
+        ], 100., 100. + 4. * ctx.actualLineHeight, tl.["init"])
+
+        ctx.drawLongText([
+            [ (funcDecl, "boolToString "); (operator, ":: "); (typeDecl, "Bool"); (operator, " -> "); (typeDecl, "String") ]
+            [ (text, "boolToString ")]
+        ], 100., 100. + 7. * ctx.actualLineHeight, tl.["init"])
+
+        ctx.drawLongText([
+            [ (text, "             value = toString (toInt value)") ]
+        ], 100., 100. + 8. * ctx.actualLineHeight, tl.["composition"])
+
+        ctx.drawLongText([
+            [ (text, "             = toString . toInt") ]
+        ], 100., 100. + 8. * ctx.actualLineHeight, tl.["pointFreeComposition"])
+
+        ctx |> drawLanguageIndicator "Haskell" tl.["init"]
+    )
+}
+
+let typesCategory = scene "typesCategory" {
+    enter (animation {
+        0 => fadeIn 750 Linear "objects"
+    })
+    run (animation {
+        0 => fadeIn 750 EaseOutQuad "identity"
+        1000 => fadeIn 750 EaseOutQuad "absurd_bool"
+        2000 => fadeIn 750 EaseOutQuad "ignore_bool"
+        3000 => fadeIn 750 EaseOutQuad "pick_bool"
+        4000 => fadeIn 750 Linear "highlight_void_unit_path"
+        4000 => fadeIn 750 EaseOutQuad "absurd_unit"
+        5000 => fadeOut 500 Linear "highlight_void_unit_path"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx |> node "Bool" 250. 700. LeftUnder tl.["objects"]
+        ctx |> node "Unit" 800. 700. RightUnder tl.["objects"]
+        ctx |> node "Void" 525. 300. CenterAbove tl.["objects"]
+
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+
+        // let highlightedArrow (startX, startY, endX, endY, cpDist, progress, highlightProgress) =
+        //     ctx.save ()
+        //     ctx.setStyle (color "#145ae4cc")
+        //     ctx.shadowColor <- "#145ab4ff"
+        //     ctx.arrow (startX +., startY + 1.)
+        //     ctx.arrow (startX, startY, endX, endY, cpDist, progress)
+
+        ctx.arcArrow (210., 695., 25., (1. - 0.65) * Math.PI, (1. - 0.65 + 1.4 * tl.["identity"]) * Math.PI)
+        ctx.arcArrow (840., 695., 25., 0.65 * Math.PI, (0.65 - 1.4 * tl.["identity"]) * Math.PI, true)
+        ctx.arcArrow (525., 345., 25., -0.2 * Math.PI, (-0.2 + 1.4 * tl.["identity"]) * Math.PI)
+
+        ctx.arrow (560., 300., 800., 665., -100., tl.["absurd_unit"])
+        ctx.arrow (490., 300., 250., 665., 75., tl.["absurd_bool"])
+
+        // ctx |> withHighlight tl.["highlight_void_unit_path"] (fun ctx -> ctx.arrow (490., 300., 250., 665., 125., tl.["absurd_bool"]))
+        // ctx |> withHighlight tl.["highlight_void_unit_path"] (fun ctx -> ctx.arrow (285., 710., 765., 710., 50., tl.["ignore_bool"]))
+
+        ctx.arrow (765., 690., 285., 690., 25., tl.["pick_bool"])
+        ctx.arrow (765., 690., 285., 690., 75., tl.["pick_bool"])
+
+    )
+}
+
+let v02_categories =
+    [ composition; compositionText; simpleCategory; jsComposition; haskComposition; typesCategory; setDefinesFunc ]
+
+let scenes = v02_categories
