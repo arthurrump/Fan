@@ -24,7 +24,7 @@ module CodeColors =
 open CodeColors
 
 let serifFont size = sprintf "%ipx 'CMU Serif', serif" size
-let mathFont size = sprintf "%ipx 'CMU Serif', math" size
+let mathFont size = sprintf "%ipx 'CMU Classical Serif', math" size
 let codeFont size = sprintf "%ipx Consolas, monospace" size
 
 let inline fadeIn duration easing property = timeline {
@@ -136,7 +136,7 @@ let node name x y align opacity (ctx : CanvasRenderingContext2D) =
     ctx.fill ()
 
     ctx.setStyle (color "#fff")
-    ctx.font <- mathFont 74
+    ctx.font <- serifFont 74
     let (textX, textY, baseline) =
         let width = ctx.measureText(name).width
         match align with
@@ -657,7 +657,7 @@ let whyTypes = scene "whyTypes" {
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.globalAlpha <- tl.["opacity"]
-        ctx.font <- mathFont 100
+        ctx.font <- serifFont 100
         ctx.setStyle (color "#fff")
         ctx.drawText ("Correctness", 200., 300., tl.["init"])
     )
@@ -716,7 +716,7 @@ let compositionText = scene "compositionText" {
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.globalAlpha <- tl.["opacity"]
-        ctx.font <- mathFont 100
+        ctx.font <- serifFont 100
         ctx.setStyle (color "#fff")
         ctx.textBaseline <- "middle"
         ctx.drawText ("Composition", 140., ctx.height / 2., tl.["init"])
@@ -756,7 +756,8 @@ let simpleCategory = scene "simpleCategory" {
         ctx.arrow (200., middle - 35., 700., middle - 35., -75., tl.["composition"])
 
         ctx.setStyle (color "#fff")
-        ctx.font <- mathFont 70
+        ctx.font <- serifFont 70
+        ctx.lineWidth <- 1.
         ctx.drawText ("1. Identity", 175., ctx.height * (2./3.) - 0.5 * ctx.actualLineHeight, tl.["identity"])
         ctx.drawText ("2. Composition", 175., ctx.height * (2./3.) + 0.5 * ctx.actualLineHeight, tl.["composition"])
     )
@@ -805,6 +806,7 @@ let haskComposition = scene "haskComposition" {
     run (animation {
         0 => fadeOut 750 Linear "composition"
         250 => fadeIn 750 Linear "pointFreeComposition"
+        2000 => fadeIn 750 Linear "mathComposition"
     })
     leave (animation {
         0 => fadeOut 500 Linear "opacity"
@@ -838,9 +840,42 @@ let haskComposition = scene "haskComposition" {
             [ (text, "             = toString . toInt") ]
         ], 100., 100. + 8. * ctx.actualLineHeight, tl.["pointFreeComposition"])
 
+        let mathPos = 100. + 9.4 * ctx.actualLineHeight
+        ctx.font <- mathFont 80
+        ctx.setStyle (color "#fff")
+        let compEq = "g \u2218 f"
+        ctx.drawText (compEq, 895., mathPos + 30., tl.["mathComposition"])
+        ctx.lineWidth <- 5.
+        ctx.strokeStyle <- rgba (255, 255, 255, tl.["mathComposition"])
+        ctx.strokeRect (875., mathPos, ctx.measureText(compEq).width + 60., (ctx.actualLineHeight / ctx.lineHeight) + 60.)
+
         ctx |> drawLanguageIndicator "Haskell" tl.["init"]
     )
 }
+
+type CanvasRenderingContext2D with
+    member ctx.drawHighlighted (?highlightProgress, ?highlightColor) = fun f ->
+        let highlightProgress = defaultArg highlightProgress 1.
+        let highlightColor = defaultArg highlightColor "#0d4dff0f"
+        if highlightProgress > 0. then
+            ctx.save ()
+            ctx.setStyle (color highlightColor)
+            ctx.shadowColor <- highlightColor
+            ctx.shadowBlur <- 1.
+            let origLineWidth = ctx.lineWidth
+            for i in 4.5 .. -0.25 .. 0. do
+                ctx.lineWidth <- origLineWidth * (1. + i * highlightProgress)
+                f ctx
+            ctx.restore ()
+        f ctx
+    member ctx.highlightedArrow (fromX, fromY, toX, toY, ?cpDist, ?progressStart, ?highlightProgress, ?highlightColor, ?progressEnd, ?headSize) =
+        let headSize = defaultArg headSize (10. + 2. * ctx.lineWidth)
+        ctx.drawHighlighted (?highlightProgress = highlightProgress, ?highlightColor = highlightColor) <| fun ctx ->
+            ctx.arrow (fromX, fromY, toX, toY, ?cpDist = cpDist, ?progressStart = progressStart, ?progressEnd = progressEnd, headSize = headSize)
+    member ctx.highlightedArcArrow (cX, cY, radius, startAngle, endAngle, ?highlightProgress, ?highlightColor, ?anticlockwise, ?headSize) =
+        let headSize = defaultArg headSize (10. + 2. * ctx.lineWidth)
+        ctx.drawHighlighted (?highlightProgress = highlightProgress, ?highlightColor = highlightColor) <| fun ctx ->
+            ctx.arcArrow (cX, cY, radius, startAngle, endAngle, ?anticlockwise = anticlockwise, headSize = headSize)
 
 let typesCategory = scene "typesCategory" {
     enter (animation {
@@ -852,44 +887,312 @@ let typesCategory = scene "typesCategory" {
         2000 => fadeIn 750 EaseOutQuad "ignore_bool"
         3000 => fadeIn 750 EaseOutQuad "pick_bool"
         4000 => fadeIn 750 Linear "highlight_void_unit_path"
-        4000 => fadeIn 750 EaseOutQuad "absurd_unit"
-        5000 => fadeOut 500 Linear "highlight_void_unit_path"
+        5000 => fadeIn 750 EaseOutQuad "absurd_unit"
+        6000 => fadeOut 500 Linear "highlight_void_unit_path"
+        7000 => fadeIn 750 Linear "highlight_bool_konst"
+        8000 => fadeOut 500 Linear "highlight_bool_konst"
     })
     leave (animation {
         0 => fadeOut 500 Linear "opacity"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
         ctx |> node "Bool" 250. 700. LeftUnder tl.["objects"]
         ctx |> node "Unit" 800. 700. RightUnder tl.["objects"]
         ctx |> node "Void" 525. 300. CenterAbove tl.["objects"]
 
-        ctx.strokeStyle <- color "#fff"
-        ctx.lineWidth <- 5.
+        ctx.setStyle (color "#fff")
+        ctx.lineWidth <- 5.            
 
-        // let highlightedArrow (startX, startY, endX, endY, cpDist, progress, highlightProgress) =
-        //     ctx.save ()
-        //     ctx.setStyle (color "#145ae4cc")
-        //     ctx.shadowColor <- "#145ab4ff"
-        //     ctx.arrow (startX +., startY + 1.)
-        //     ctx.arrow (startX, startY, endX, endY, cpDist, progress)
-
-        ctx.arcArrow (210., 695., 25., (1. - 0.65) * Math.PI, (1. - 0.65 + 1.4 * tl.["identity"]) * Math.PI)
+        ctx.highlightedArcArrow (210., 695., 25., (1. - 0.65) * Math.PI, (1. - 0.65 + 1.4 * tl.["identity"]) * Math.PI, tl.["highlight_bool_konst"])
+        ctx.save ()
+        ctx.font <- serifFont 35
+        ctx.lineWidth <- 1.
+        ctx.drawText ("4x", 150., 670., tl.["identity"])
+        ctx.restore ()
         ctx.arcArrow (840., 695., 25., 0.65 * Math.PI, (0.65 - 1.4 * tl.["identity"]) * Math.PI, true)
         ctx.arcArrow (525., 345., 25., -0.2 * Math.PI, (-0.2 + 1.4 * tl.["identity"]) * Math.PI)
 
-        ctx.arrow (560., 300., 800., 665., -100., tl.["absurd_unit"])
-        ctx.arrow (490., 300., 250., 665., 75., tl.["absurd_bool"])
-
-        // ctx |> withHighlight tl.["highlight_void_unit_path"] (fun ctx -> ctx.arrow (490., 300., 250., 665., 125., tl.["absurd_bool"]))
-        // ctx |> withHighlight tl.["highlight_void_unit_path"] (fun ctx -> ctx.arrow (285., 710., 765., 710., 50., tl.["ignore_bool"]))
-
+        ctx.highlightedArrow (490., 300., 250., 665., 100., tl.["absurd_bool"], tl.["highlight_void_unit_path"])
+        ctx.highlightedArrow (285., 710., 765., 710., 50., tl.["ignore_bool"], tl.["highlight_void_unit_path"] + tl.["highlight_bool_konst"])
         ctx.arrow (765., 690., 285., 690., 25., tl.["pick_bool"])
-        ctx.arrow (765., 690., 285., 690., 75., tl.["pick_bool"])
+        ctx.highlightedArrow (765., 690., 285., 690., 75., tl.["pick_bool"], tl.["highlight_bool_konst"])
 
+        ctx.highlightedArrow (560., 300., 800., 665., -100., tl.["absurd_unit"], tl.["highlight_void_unit_path"])
+    )
+}
+
+let inline interpolate a0 a1 w =
+    (float a1 - float a0) * w + float a0
+
+let compositionRules = scene "compositionRules" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        let line l = ctx.height * (1./3.) + l * ctx.actualLineHeight
+        ctx.textBaseline <- "top"
+        ctx.setStyle (color "#fff")
+
+        ctx.font <- serifFont 70
+        ctx.drawText ("1. Associativity", 100., interpolate (line 0.) 100. (1. - tl.["opacity"]), tl.["init"])
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.drawText ("2. Identity", 100., line 1., tl.["init"])
+    )
+}
+
+let associativity = scene "associativity" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+        750 => fadeIn 750 EaseOutQuad "initialArrows"
+        1500 => fadeIn 750 Linear "mathEnter"
+    })
+    run (animation {
+        timeline {
+            0 => vars {
+                "hi_f" => 0
+                "hi_g" => 0
+                "hi_h" => 0
+                "hi_fg" => 0
+                "hi_gh" => 0
+            }
+        }
+        for f in [ "f"; "g"; "h"] do 
+            0 => fadeIn 750 Linear $"hi_{f}"
+        
+        1500 => fadeOut 500 Linear "hi_f"
+        1500 => fadeOut 500 Linear "hi_g"
+        1500 => fadeIn 750 Linear "hi_fg"
+
+        3000 => fadeIn 750 Linear "hi_f"
+        3000 => fromTo 0. 0.5 750 Linear "hi_g"
+        3000 => fadeOut 500 Linear "hi_fg"
+        3750 => fadeOut 500 Linear "hi_g"
+        3750 => fadeOut 500 Linear "hi_h"
+        3750 => fadeIn 750 Linear "hi_gh"
+
+        6000 => fadeOut 500 Linear "hi_f"
+        6000 => fadeOut 500 Linear "hi_gh"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+
+        ctx.textBaseline <- "top"
+        ctx.setStyle (color "#fff")
+        ctx.font <- serifFont 70
+        ctx.drawText ("1. Associativity", 100., 100., 1.)
+
+        ctx.globalAlpha <- 1.
+
+        // Objects
+        let middle = ctx.height / 2.
+        ctx |> node "" 200. (middle - 200.) CenterUnder tl.["init"]
+        ctx |> node "" 600. (middle - 200.) CenterUnder tl.["init"]
+        ctx |> node "" 600. (middle + 200.) CenterUnder tl.["init"]
+        ctx |> node "" 200. (middle + 200.) CenterUnder tl.["init"]
+
+        // Morphism styling
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+
+        let w = (255, 255, 255, 1.)
+        let t = (0, 0, 0, 0.)
+        let f = (13, 77, 255, 1.)
+        let g = (255, 13, 17, 1.)
+        let h = (49, 255, 13, 1.)
+        let fg = (162, 13, 255, 1.)
+        let gh = (255, 186, 13, 1.)
+
+        let inline cp (r1, g1, b1, a1) (r2, g2, b2, a2) w = (interpolate r1 r2 w, interpolate g1 g2 w, interpolate b1 b2 w, interpolate a1 a2 w)
+        let hc (r, g, b, _) = $"rgba(%i{r}, %i{g}, %i{b}, 0.06)"
+
+        // Sides
+        ctx.highlightedArrow (235., middle - 200., 565., middle - 200., 0., stagger 2 0 tl.["initialArrows"], tl.["hi_fg"], highlightColor = hc fg)
+        ctx.highlightedArrow (235., middle + 200., 565., middle + 200., 0., stagger 2 1 tl.["initialArrows"], tl.["hi_gh"], highlightColor = hc gh)
+        ctx.highlightedArrow (200., middle - 165., 200., middle + 165., 0., stagger 2 0 tl.["initialArrows"], tl.["hi_f"], highlightColor = hc f)
+        ctx.highlightedArrow (600., middle - 165., 600., middle + 165., 0., stagger 2 1 tl.["initialArrows"], tl.["hi_h"], highlightColor = hc h)
+        
+        // Diagonals
+        let d = sqrt (35.**2. / 2.)
+        ctx.arrow (200. + d, middle - 200. + d, 600. - d, middle + 200. - d, 0., tl.["initialArrows"])
+        ctx.highlightedArrow (200. + d, middle + 200. - d, 600. - d, middle - 200. + d, 0., tl.["initialArrows"], tl.["hi_g"], highlightColor = hc g)
+
+        // Identities
+        let d = sqrt (45.**2. / 2.)
+        ctx.arcArrow (200. - d, middle - 200. - d, 25., 0.5 * Math.PI, (0.5 + tl.["initialArrows"] * 1.5) * Math.PI)
+        ctx.arcArrow (200. - d, middle + 200. + d, 25., 0., (tl.["initialArrows"] * 1.5) * Math.PI)
+        ctx.arcArrow (600. + d, middle - 200. - d, 25., Math.PI, (1. + tl.["initialArrows"] * 1.5) * Math.PI)
+        ctx.arcArrow (600. + d, middle + 200. + d, 25., 1.5 * Math.PI, (1.5 + tl.["initialArrows"] * 1.5) * Math.PI)
+
+        // Function labels
+        ctx.font <- mathFont 60
+        ctx.textBaseline <- "top"
+        ctx.drawText ("f", 155., 400., tl.["mathEnter"])
+        
+        ctx.globalAlpha <- tl.["opacity"]
+        
+        ctx.drawText ("g", 330., 610., tl.["mathEnter"])
+        ctx.drawText ("h", 620., 400., tl.["mathEnter"])
+
+
+        // Math
+        ctx.font <- mathFont 80
+        ctx.textBaseline <- "middle"
+        ctx.lineWidth <- 1.
+        ctx.drawLongText([
+            [ (rgba (cp t gh tl.["hi_gh"]), "(")
+              (rgba (cp (cp w h tl.["hi_h"]) gh tl.["hi_gh"]), "h") 
+              (rgba (cp w gh tl.["hi_gh"]), " \u2218")
+              (rgba (cp t fg tl.["hi_fg"]), "(")
+              (rgba (cp (cp (cp w g tl.["hi_g"]) gh tl.["hi_gh"]) fg tl.["hi_fg"]), "g")
+              (rgba (cp t gh tl.["hi_gh"]), ")")
+              (rgba (cp w fg tl.["hi_fg"]), "\u2218 ")
+              (rgba (cp (cp w f tl.["hi_f"]) fg tl.["hi_fg"]), "f")
+              (rgba (cp t fg tl.["hi_fg"]), ")") ]
+        ], 750., middle, tl.["mathEnter"])
+    )
+}
+
+let identity = scene "identity" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+        750 => fadeIn 750 Linear "hi_f"
+    })
+    run (animation {
+        0 => fadeIn 750 Linear "id_f"
+        0 => fadeIn 750 Linear "hi_id_f"
+        1500 => fadeOut 500 Linear "hi_id_f"
+
+        3000 => fadeIn 750 Linear "f_id"
+        3000 => fadeIn 750 Linear "hi_f_id"
+
+        5000 => fadeOut 500 Linear "hi_f_id"
+        5000 => fadeOut 500 Linear "hi_f"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+
+        ctx.textBaseline <- "top"
+        ctx.setStyle (color "#fff")
+        ctx.font <- serifFont 70
+        ctx.drawText ("2. Identity", 100., 100., tl.["init"])
+
+        // Objects
+        let middle = ctx.height / 2.
+        ctx |> node "" 200. (middle - 200.) CenterUnder 1.
+        ctx |> node "" 600. (middle - 200.) CenterUnder 1.
+        ctx |> node "" 600. (middle + 200.) CenterUnder 1.
+        ctx |> node "" 200. (middle + 200.) CenterUnder 1.
+
+        // Morphism styling
+        ctx.strokeStyle <- color "#fff"
+        ctx.lineWidth <- 5.
+
+        // Sides
+        ctx.arrow (235., middle - 200., 565., middle - 200., 0., 1.)
+        ctx.arrow (235., middle + 200., 565., middle + 200., 0., 1.)
+        ctx.highlightedArrow (200., middle - 165., 200., middle + 165., 0., 1., tl.["hi_f"])
+        ctx.arrow (600., middle - 165., 600., middle + 165., 0., 1.)
+        
+        // Diagonals
+        let d = sqrt (35.**2. / 2.)
+        ctx.arrow (200. + d, middle - 200. + d, 600. - d, middle + 200. - d, 0.)
+        ctx.arrow (200. + d, middle + 200. - d, 600. - d, middle - 200. + d, 0.)
+
+        // Identities
+        let d = sqrt (45.**2. / 2.)
+        ctx.highlightedArcArrow (200. - d, middle - 200. - d, 25., 0.5 * Math.PI, (0.5 + 1.5) * Math.PI, tl.["hi_id_f"])
+        ctx.highlightedArcArrow (200. - d, middle + 200. + d, 25., 0., 1.5 * Math.PI, tl.["hi_f_id"])
+        ctx.arcArrow (600. + d, middle - 200. - d, 25., Math.PI, (1. + 1.5) * Math.PI)
+        ctx.arcArrow (600. + d, middle + 200. + d, 25., 1.5 * Math.PI, (1.5 + 1.5) * Math.PI)
+
+        // Function labels
+        ctx.font <- mathFont 60
+        ctx.textBaseline <- "top"
+        ctx.fillText ("f", 155., 400.)
+
+        // Math
+        ctx.font <- mathFont 80
+        ctx.textBaseline <- "top"
+        ctx.lineWidth <- 1.
+        ctx.drawText("id \u2218 f = f", 750., middle - ctx.actualLineHeight, tl.["id_f"])
+        ctx.drawText("f \u2218 id = f", 750., middle, tl.["f_id"])
+    )
+}
+
+let categorySet = scene "categorySet" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+    })
+    run (animation {
+        timeline' (Alternate, Infinite) {
+            0 => vars { "seed" => 1.1 }
+            3500 => vars { "seed" => 1.21 }
+        }
+        timeline' (Normal, Infinite) {
+            for i in 0 .. 5 do
+                i * 1000 => vars { $"arrow_%i{i}_in" => 0; $"arrow_%i{i}_out" => 0 }
+                i * 1000 + 1000 => vars { $"arrow_%i{i}_in" => (1, EaseOutQuad) }
+                i * 1000 + 1000 => vars { $"arrow_%i{i}_out" => 0 }
+                i * 1000 + 1999 => vars { $"arrow_%i{i}_in" => 1; $"arrow_%i{i}_out" => (1, EaseInQuad) }
+                i * 1000 + 2000 => vars { $"arrow_%i{i}_in" => 0; $"arrow_%i{i}_out" => 0 }
+        }
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+
+        ctx.font <- serifFont 100
+        ctx.setStyle (color "#fff")
+        ctx.drawText ("Set", 500., 320., tl.["init"])
+
+
+        ctx.globalAlpha <- ctx.globalAlpha * tl.["init"]
+        ctx.strokeStyle <- color "#def"
+        ctx.fillStyle <- color "#defc"
+        ctx.lineWidth <- 3.
+        ctx.beginPath ()
+        ctx.fluffyEllipse(400., ctx.height / 2., 150., 200., seed = tl.["seed"])
+        ctx.fill ()
+        ctx.stroke ()
+
+        ctx.setStyle (color "#fff")
+        ctx.beginPath ()
+        ctx.ellipse (320., 406., 7.)
+        ctx.fill ()
+        ctx.beginPath ()
+        ctx.ellipse (409., 609., 7.)
+        ctx.fill ()
+        ctx.beginPath ()
+        ctx.ellipse (500., 500., 7.)
+        ctx.fill ()
+        ctx.beginPath ()
+        ctx.ellipse (298., 600., 7.)
+        ctx.fill ()
+
+        ctx.lineWidth <- 2.
+        ctx.arrow (320., 406., 409., 609., 20., tl.["arrow_0_in"], tl.["arrow_0_out"])
+        ctx.arrow (409., 609., 500., 500., -15., tl.["arrow_1_in"], tl.["arrow_1_out"])
+        ctx.arrow (298., 600., 320., 406., 25., tl.["arrow_2_in"], tl.["arrow_2_out"])
+        ctx.arrow (320., 406., 500., 500., -20., tl.["arrow_3_in"], tl.["arrow_3_out"])
+        ctx.arrow (500., 500., 298., 600., 10., tl.["arrow_4_in"], tl.["arrow_4_out"])
+        ctx.arrow (500., 500., 320., 406., 15., tl.["arrow_5_in"], tl.["arrow_5_out"])
     )
 }
 
 let v02_categories =
-    [ composition; compositionText; simpleCategory; jsComposition; haskComposition; typesCategory; setDefinesFunc ]
+    [ composition; compositionText; simpleCategory; jsComposition; haskComposition
+      typesCategory; compositionRules; associativity; identity; categorySet ]
 
 let scenes = v02_categories
