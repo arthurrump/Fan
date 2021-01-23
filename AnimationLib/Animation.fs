@@ -311,10 +311,14 @@ type TimelineBuilder(?direction, ?loop) =
         [ ts ]
     member this.Yield ((t, var) : int * Var<'t> list) = 
         this.Yield ((float t, var))
+    member __.YieldFrom (timestamps : #seq<Timestamp<'t>>) =
+        timestamps |> Seq.toList
     member __.Delay (f) = 
         f()
     member __.Combine (t1 : Timestamp<'t> list, t2) = 
         Timestamps.combine t1 t2
+    member this.For (i : 'a seq, f : 'a -> Timestamp<'t> list) =
+        i |> Seq.collect f |> this.YieldFrom
     member __.Run (timestamps) = 
         let dur = Timestamps.duration timestamps
         let reverse = timestamps |> List.map (fun (t, var) -> (dur - t, var))
