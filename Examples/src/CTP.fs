@@ -730,7 +730,8 @@ let simpleCategory = scene "simpleCategory" {
     })
     run (animation {
         0 => fadeIn 750 EaseOutQuad "identity"
-        1000 => fadeIn 750 EaseOutQuad "composition"
+        5000 => fadeIn 750 EaseOutQuad "composition"
+        17000 => fadeIn 750 EaseOutQuad "composition_arrow"
     })
     leave (animation {
         0 => fadeOut 500 Linear "opacity"
@@ -753,7 +754,7 @@ let simpleCategory = scene "simpleCategory" {
         ctx.arcArrow (450., middle + 45., 25., -0.2 * Math.PI, (-0.2 + 1.4 * tl.["identity"]) * Math.PI)
         ctx.arcArrow (700., middle + 45., 25., -0.2 * Math.PI, (-0.2 + 1.4 * tl.["identity"]) * Math.PI)
 
-        ctx.arrow (200., middle - 35., 700., middle - 35., -75., tl.["composition"])
+        ctx.arrow (200., middle - 35., 700., middle - 35., -75., tl.["composition_arrow"])
 
         ctx.setStyle (color "#fff")
         ctx.font <- serifFont 70
@@ -806,7 +807,7 @@ let haskComposition = scene "haskComposition" {
     run (animation {
         0 => fadeOut 750 Linear "composition"
         250 => fadeIn 750 Linear "pointFreeComposition"
-        2000 => fadeIn 750 Linear "mathComposition"
+        23500 => fadeIn 750 Linear "mathComposition"
     })
     leave (animation {
         0 => fadeOut 500 Linear "opacity"
@@ -882,15 +883,15 @@ let typesCategory = scene "typesCategory" {
         0 => fadeIn 750 Linear "objects"
     })
     run (animation {
-        0 => fadeIn 750 EaseOutQuad "identity"
-        1000 => fadeIn 750 EaseOutQuad "absurd_bool"
-        2000 => fadeIn 750 EaseOutQuad "ignore_bool"
-        3000 => fadeIn 750 EaseOutQuad "pick_bool"
-        4000 => fadeIn 750 Linear "highlight_void_unit_path"
-        5000 => fadeIn 750 EaseOutQuad "absurd_unit"
-        6000 => fadeOut 500 Linear "highlight_void_unit_path"
-        7000 => fadeIn 750 Linear "highlight_bool_konst"
-        8000 => fadeOut 500 Linear "highlight_bool_konst"
+        0 => fadeIn 750 EaseOutQuad "identity" // 3:32,5
+        4500 => fadeIn 750 EaseOutQuad "absurd_bool" // 3:37
+        9000 => fadeIn 750 EaseOutQuad "ignore_bool" // 3:41,5
+        12500 => fadeIn 750 EaseOutQuad "pick_bool" // 3:45
+        19500 => fadeIn 750 Linear "highlight_void_unit_path" // 3:52
+        29500 => fadeIn 750 EaseOutQuad "absurd_unit" // 4:02
+        34000 => fadeOut 500 Linear "highlight_void_unit_path" // 4:06,5
+        46500 => fadeIn 750 Linear "highlight_bool_konst" // 4:19
+        59000 => fadeOut 500 Linear "highlight_bool_konst" // 4:33,5
     })
     leave (animation {
         0 => fadeOut 500 Linear "opacity"
@@ -960,22 +961,27 @@ let associativity = scene "associativity" {
                 "hi_gh" => 0
             }
         }
+
+        // 5:09,5
         for f in [ "f"; "g"; "h"] do 
             0 => fadeIn 750 Linear $"hi_{f}"
         
-        1500 => fadeOut 500 Linear "hi_f"
-        1500 => fadeOut 500 Linear "hi_g"
-        1500 => fadeIn 750 Linear "hi_fg"
+        // 5:21
+        11500 => fadeOut 500 Linear "hi_f"
+        11500 => fadeOut 500 Linear "hi_g"
+        11500 => fadeIn 750 Linear "hi_fg"
 
-        3000 => fadeIn 750 Linear "hi_f"
-        3000 => fromTo 0. 0.5 750 Linear "hi_g"
-        3000 => fadeOut 500 Linear "hi_fg"
-        3750 => fadeOut 500 Linear "hi_g"
-        3750 => fadeOut 500 Linear "hi_h"
-        3750 => fadeIn 750 Linear "hi_gh"
+        19750 => fadeIn 750 Linear "hi_f"
+        19750 => fromTo 0. 0.5 750 Linear "hi_g"
+        19750 => fadeOut 500 Linear "hi_fg"
+        // 5:30
+        20500 => fadeOut 500 Linear "hi_g"
+        20500 => fadeOut 500 Linear "hi_h"
+        20500 => fadeIn 750 Linear "hi_gh"
 
-        6000 => fadeOut 500 Linear "hi_f"
-        6000 => fadeOut 500 Linear "hi_gh"
+        // 5:39
+        29500 => fadeOut 500 Linear "hi_f"
+        29500 => fadeOut 500 Linear "hi_gh"
     })
     leave (animation {
         0 => fadeOut 500 Linear "opacity"
@@ -1065,15 +1071,20 @@ let identity = scene "identity" {
         750 => fadeIn 750 Linear "hi_f"
     })
     run (animation {
+        // 5:51
         0 => fadeIn 750 Linear "id_f"
         0 => fadeIn 750 Linear "hi_id_f"
-        1500 => fadeOut 500 Linear "hi_id_f"
 
-        3000 => fadeIn 750 Linear "f_id"
-        3000 => fadeIn 750 Linear "hi_f_id"
+        // 5:56,5
+        5500 => fadeOut 500 Linear "hi_id_f"
 
-        5000 => fadeOut 500 Linear "hi_f_id"
-        5000 => fadeOut 500 Linear "hi_f"
+        // 5:59
+        8000 => fadeIn 750 Linear "f_id"
+        8000 => fadeIn 750 Linear "hi_f_id"
+
+        // 6:04,5
+        13500 => fadeOut 500 Linear "hi_f_id"
+        13500 => fadeOut 500 Linear "hi_f"
     })
     leave (animation {
         0 => fadeOut 500 Linear "opacity"
@@ -1242,4 +1253,4 @@ let kleisliWriter = scene "kleisliWriter" {
 let v03_kleisli =
     [ kleisliWriter ]
 
-let scenes = v03_kleisli
+let scenes = v02_categories
