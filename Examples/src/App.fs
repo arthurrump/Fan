@@ -260,8 +260,8 @@ let haskell = scene "test-haskell" {
         ctx.save ()
 
         let text = 
-            [ [ (CTP.CodeColors.funcDecl, "id"); (CTP.CodeColors.operator, " :: "); (CTP.CodeColors.var, "a"); (CTP.CodeColors.operator, " -> "); (CTP.CodeColors.var, "a") ]
-              [ (CTP.CodeColors.text, "id "); (CTP.CodeColors.text, "x"); (CTP.CodeColors.text, " = "); (CTP.CodeColors.text, "x") ] ]
+            [ [ style CTP.CodeColors.funcDecl "id"; style CTP.CodeColors.operator " :: "; style CTP.CodeColors.var "a"; style CTP.CodeColors.operator " -> "; style CTP.CodeColors.var "a" ]
+              [ style CTP.CodeColors.text "id "; style CTP.CodeColors.text "x"; style CTP.CodeColors.text " = "; style CTP.CodeColors.text "x" ] ]
         
         ctx.font <- CTP.codeFont 200
         ctx.setStyle (color "#fff")
@@ -283,7 +283,7 @@ CTP.scenes
 |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.clear ()
     ctx.save ()
-    // ctx |> grid 100. (color "#eee")
+    ctx |> grid 100. (color "#eee")
     render ctx tl t
     ctx.restore ()
 ))

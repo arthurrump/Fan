@@ -119,38 +119,65 @@ let endCredits = scene "endCredits" {
 
 let v_general = [ intro; endCredits ]
 
+let inline interpolate a0 a1 w =
+    (float a1 - float a0) * w + float a0
+
 type TextAlign = 
     | LeftAbove | CenterAbove | RightAbove
     | Left                    | Right
     | LeftUnder | CenterUnder | RightUnder
 
-let node name x y align opacity (ctx : CanvasRenderingContext2D) =
-    ctx.save ()
-    ctx.strokeStyle <- color "#fff"
-    ctx.fillStyle <- rgba (255, 255, 255, opacity)
-    ctx.beginPath ()
-    ctx.ellipse (x, y, 25., endAngle = opacity * 2. * Math.PI)
-    ctx.stroke ()
-    ctx.beginPath ()
-    ctx.ellipse (x, y, 25.)
-    ctx.fill ()
+module private CanvasContext =
+    let mutable nodeSize : float = 25.
 
-    ctx.setStyle (color "#fff")
-    ctx.font <- serifFont 74
-    let (textX, textY, baseline) =
-        let width = ctx.measureText(name).width
-        match align with
-        | LeftAbove -> (x - width, y - 35., "bottom")
-        | CenterAbove -> (x - width / 2., y - 35., "bottom")
-        | RightAbove -> (x, y - 35., "bottom")
-        | Left -> (x - width - 35., y, "middle")
-        | Right -> (x + 35., y, "middle")
-        | LeftUnder -> (x - width, y + 35., "top")
-        | CenterUnder -> (x - width / 2., y + 35., "top")
-        | RightUnder -> (x, y + 35., "top")
-    ctx.textBaseline <- baseline
-    ctx.drawText (name, textX, textY, opacity)
-    ctx.restore ()
+type CanvasRenderingContext2D with
+    member __.nodeSize with get () = CanvasContext.nodeSize
+    member __.nodeSize with set (value) = CanvasContext.nodeSize <- value
+    member ctx.node (name, x, y, align, opacity, ?fontSize) =
+        let size = ctx.nodeSize
+        let fontSize = defaultArg fontSize (int (74. * size / 25.))
+        let margin = size + 10.
+        ctx.save ()
+        ctx.lineWidth <- 1.
+        ctx.strokeStyle <- color "#fff"
+        ctx.fillStyle <- rgba (255, 255, 255, opacity)
+        ctx.beginPath ()
+        ctx.ellipse (x, y, size, endAngle = opacity * 2. * Math.PI)
+        ctx.stroke ()
+        ctx.beginPath ()
+        ctx.ellipse (x, y, size)
+        ctx.fill ()
+
+        ctx.setStyle (color "#fff")
+        ctx.font <- serifFont fontSize
+        let (textX, textY, baseline) =
+            let width = ctx.measureText(name).width
+            match align with
+            | LeftAbove -> (x - width, y - margin, "bottom")
+            | CenterAbove -> (x - width / 2., y - margin, "bottom")
+            | RightAbove -> (x, y - margin, "bottom")
+            | Left -> (x - width - margin, y, "middle")
+            | Right -> (x + margin, y, "middle")
+            | LeftUnder -> (x - width, y + margin, "top")
+            | CenterUnder -> (x - width / 2., y + margin, "top")
+            | RightUnder -> (x, y + margin, "top")
+        ctx.textBaseline <- baseline
+        ctx.drawText (name, textX, textY, opacity)
+        ctx.restore ()
+    member ctx.nodeArrow (fromX, fromY, toX, toY, cpDist, ?progressStart, ?progressEnd, ?headSize) =
+        let progressStart = defaultArg progressStart 1.
+        let progressEnd = defaultArg progressEnd 0.
+        let (cX, cY) = quadraticControlPoint fromX fromY toX toY cpDist
+        let arrowLength = 
+            bezierLineSegments 5 fromX fromY cX cY toX toY
+            |> List.map (fun ((bx, by), (ex, ey)) -> sqrt ((bx - ex)**2. + (by - ey)**2.))
+            |> List.sum
+
+        let nodeHiddenPart = (ctx.nodeSize + 5.) / arrowLength
+        let progressStart = interpolate nodeHiddenPart (1. - nodeHiddenPart) progressStart
+        let progressEnd = interpolate nodeHiddenPart (1. - nodeHiddenPart) progressEnd
+
+        ctx.arrow (fromX, fromY, toX, toY, cpDist, progressStart, progressEnd, ?headSize = headSize)
 
 let category = scene "test-category" {
     enter (animation {
@@ -164,9 +191,9 @@ let category = scene "test-category" {
         4000 => fadeIn 1000 EaseOutQuad "ArrowIdentity"
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
-        ctx |> node "Unit" 250. 700. LeftUnder tl.["ObjectUnit"]
-        ctx |> node "Bool" 800. 700. RightUnder tl.["ObjectBool"]
-        ctx |> node "Void" 525. 300. CenterAbove tl.["ObjectVoid"]
+        ctx.node ("Unit", 250., 700., LeftUnder, tl.["ObjectUnit"])
+        ctx.node ("Bool", 800., 700., RightUnder, tl.["ObjectBool"])
+        ctx.node ("Void", 525., 300., CenterAbove, tl.["ObjectVoid"])
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
@@ -302,8 +329,8 @@ let intRange = scene "intRange" {
         ctx.fillText ("Int", 100., 200.)
 
         ctx.drawLongText ([
-            [ (operator, "[ "); (numberLit, "−2147483648") ] 
-            [ (operator, " .. "); (numberLit, "2147483647"); (operator, " ]") ]
+            [ style operator "[ "; style numberLit "−2147483648" ] 
+            [ style operator " .. "; style numberLit "2147483647"; style operator " ]" ]
         ], 110., 350., tl.["range"])
     )
 }
@@ -361,7 +388,7 @@ let unitSet = scene "unitSet" {
 
         ctx.drawText ("Unit", 100., 200., tl.["title"])
         
-        ctx.drawLongText ([ [ (text, "("); (keyword, "void"); (text, ")") ] ], 500., 200., tl.["void"])
+        ctx.drawLongText ([ [ style text "("; style keyword "void"; style text ")" ] ], 500., 200., tl.["void"])
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
@@ -397,32 +424,32 @@ let voidIsUnit = scene "voidIsUnit" {
         ctx.textBaseline <- "top"
 
         ctx.drawLongText([
-            [ (keyword, "public sealed class "); (typeDecl, "Unit") ] 
-            [ (operator, "{") ]
-            [ (keyword, "  public static "); (typeDecl, "Unit "); (var, "Instance"); (operator, " = "); 
-              (keyword, "new "); (typeDecl, "Unit"); (operator, "();") ]
-            [ (keyword, "  private "); (funcDecl, "Unit"); (operator, "() { }") ]
-            [ (operator, "}") ]
+            [ style keyword "public sealed class "; style typeDecl "Unit" ] 
+            [ style operator "{" ]
+            [ style keyword "  public static "; style typeDecl "Unit "; style var "Instance"; style operator " = "; 
+              style keyword "new "; style typeDecl "Unit"; style operator "();" ]
+            [ style keyword "  private "; style funcDecl "Unit"; style operator "() { }" ]
+            [ style operator "}" ]
         ], 100., 100., tl.["class_unit"])
 
         ctx.drawLongText([
-            [ (keyword, "     "); (funcDecl, "Ignore"); (operator, "<"); (typeDecl, "T"); (operator, ">(")
-              (typeDecl, "T "); (var, "value"); (operator, ")") ]
-            [ (operator, "{") ]
-            [ (keyword, "  "); (control, "return"); ]
-            [ (operator, "}") ]
+            [ style keyword "     "; style funcDecl "Ignore"; style operator "<"; style typeDecl "T"; style operator ">("
+              style typeDecl "T "; style var "value"; style operator ")" ]
+            [ style operator "{" ]
+            [ style keyword "  "; style control "return"; ]
+            [ style operator "}" ]
         ], 100., 520., tl.["code"])
 
         ctx.drawLongText([
-            [ (keyword, "void") ]
+            [ style keyword "void" ]
             [ ]
-            [ (text, "        "); (operator, ";") ]
+            [ style text "        "; style operator ";" ]
         ], 100., 520., tl.["code_void"])
 
         ctx.drawLongText([
-            [ (typeDecl, "Unit") ]
+            [ style typeDecl "Unit" ]
             [ ]
-            [ (text, "         "); (var, "Unit"); (operator, "."); (var, "Instance"); (operator, ";") ]
+            [ style text "         "; style var "Unit"; style operator "."; style var "Instance"; style operator ";" ]
         ], 100., 520., tl.["code_unit"])
 
         ctx |> drawLanguageIndicator "C#" tl.["code"]
@@ -472,10 +499,10 @@ let voidOO = scene "voidOO" {
         ctx.font <- codeFont 70
         ctx.textBaseline <- "top"
         ctx.drawLongText([
-            [ (keyword, "public sealed class "); (typeDecl, "Void") ]
-            [ (operator, "{") ]
-            [ (keyword, "  private "); (funcDecl, "Void"); (operator, "() { }") ]
-            [ (operator, "}") ]
+            [ style keyword "public sealed class "; style typeDecl "Void" ]
+            [ style operator "{" ]
+            [ style keyword "  private "; style funcDecl "Void"; style operator "() { }" ]
+            [ style operator "}" ]
         ], 100., 350., tl.["code"])
         
         ctx |> drawLanguageIndicator "C#" tl.["code"]
@@ -560,9 +587,9 @@ let haskellToInt = scene "haskellToInt" {
         ctx.globalAlpha <- tl.["opacity"]
         ctx.font <- codeFont 70
         ctx.drawLongText([
-            [ (funcDecl, "toInt "); (operator, ":: "); (typeDecl, "Bool"); (operator, " -> "); (typeDecl, "Int") ]
-            [ (text, "toInt False = "); (numberLit, "0") ]
-            [ (text, "toInt True = "); (numberLit, "1") ]
+            [ style funcDecl "toInt "; style operator ":: "; style typeDecl "Bool"; style operator " -> "; style typeDecl "Int" ]
+            [ style text "toInt False = "; style numberLit "0" ]
+            [ style text "toInt True = "; style numberLit "1" ]
         ], 100., 450., tl.["init"])
         ctx |> drawLanguageIndicator "Haskell" tl.["init"]
     )
@@ -638,11 +665,11 @@ let sideEffect = scene "sideEffect" {
         ctx.font <- codeFont 70
         ctx.textBaseline <- "top"
         ctx.drawLongText([
-            [ (keyword, "public "); (typeDecl, "double "); (funcDecl, "Square"); (text, "(")
-              (typeDecl, "double "); (text, "x) {") ]
-            [ (text, "  System.out."); (funcDecl, "println"); (text, "("); (stringLit, "\"Squaring \""); (text, " + x);") ]
-            [ (control, "  return "); (text, "x * x;") ]
-            [ (text, "}") ]
+            [ style keyword "public "; style typeDecl "double "; style funcDecl "Square"; style text "("
+              style typeDecl "double "; style text "x) {" ]
+            [ style text "  System.out."; style funcDecl "println"; style text "("; style stringLit "\"Squaring \""; style text " + x);" ]
+            [ style control "  return "; style text "x * x;" ]
+            [ style text "}" ]
         ], 100., 100., tl.["init"])
         ctx |> drawLanguageIndicator "Java" tl.["init"]
     )
@@ -740,9 +767,9 @@ let simpleCategory = scene "simpleCategory" {
         ctx.globalAlpha <- tl.["opacity"]
 
         let middle = ctx.height / 3.
-        ctx |> node "" 200. middle CenterUnder tl.["init"]
-        ctx |> node "" 450. middle CenterUnder tl.["init"]
-        ctx |> node "" 700. middle CenterUnder tl.["init"]
+        ctx.node ("", 200., middle, CenterUnder, tl.["init"])
+        ctx.node ("", 450., middle, CenterUnder, tl.["init"])
+        ctx.node ("", 700., middle, CenterUnder, tl.["init"])
 
         ctx.strokeStyle <- color "#fff"
         ctx.lineWidth <- 5.
@@ -780,19 +807,19 @@ let jsComposition = scene "jsComposition" {
         ctx.textBaseline <- "top"
 
         ctx.drawLongText([
-            [ (keyword, "function "); (funcDecl, "toInt"); (text, "("); (var, "value"); (text, ") {") ]
-            [ (control, "  return "); (var, "value"); (operator, " ? "); (numberLit, "1"); (operator, " : "); (numberLit, "0"); (text, ";") ]
-            [ (text, "}") ]
+            [ style keyword "function "; style funcDecl "toInt"; style text "("; style var "value"; style text ") {" ]
+            [ style control "  return "; style var "value"; style operator " ? "; style numberLit "1"; style operator " : "; style numberLit "0"; style text ";" ]
+            [ style text "}" ]
         ], 100., 100., tl.["init"])
 
         ctx.drawLongText([
-            [ (keyword, "function "); (funcDecl, "toString"); (text, "("); (var, "value"); (text, ") {") ]
-            [ (control, "  return "); (var, "value"); (text, "."); (funcDecl, "toString"); (text, "();") ]
-            [ (text, "}") ]
+            [ style keyword "function "; style funcDecl "toString"; style text "("; style var "value"; style text ") {" ]
+            [ style control "  return "; style var "value"; style text "."; style funcDecl "toString"; style text "();" ]
+            [ style text "}" ]
         ], 100., 100. + 4. * ctx.actualLineHeight, tl.["init"])
 
         ctx.drawLongText([
-            [ (funcDecl, "toString"); (text, "("); (funcDecl, "toInt"); (text, "("); (keyword, "true"); (text, "));") ]
+            [ style funcDecl "toString"; style text "("; style funcDecl "toInt"; style text "("; style keyword "true"; style text "));" ]
         ], 100., 100. + 8. * ctx.actualLineHeight, tl.["composition"])
 
         ctx |> drawLanguageIndicator "JavaScript" tl.["init"]
@@ -818,27 +845,27 @@ let haskComposition = scene "haskComposition" {
         ctx.textBaseline <- "top"
 
         ctx.drawLongText([
-            [ (funcDecl, "toInt "); (operator, ":: "); (typeDecl, "Bool"); (operator, " -> "); (typeDecl, "Int") ]
-            [ (text, "toInt False = "); (numberLit, "0") ]
-            [ (text, "toInt True = "); (numberLit, "1") ]
+            [ style funcDecl "toInt "; style operator ":: "; style typeDecl "Bool"; style operator " -> "; style typeDecl "Int" ]
+            [ style text "toInt False = "; style numberLit "0" ]
+            [ style text "toInt True = "; style numberLit "1" ]
         ], 100., 100., tl.["init"])
 
         ctx.drawLongText([
-            [ (funcDecl, "toString "); (operator, ":: "); (typeDecl, "Int"); (operator, " -> "); (typeDecl, "String") ]
-            [ (text, "toString value = show value") ]
+            [ style funcDecl "toString "; style operator ":: "; style typeDecl "Int"; style operator " -> "; style typeDecl "String" ]
+            [ style text "toString value = show value" ]
         ], 100., 100. + 4. * ctx.actualLineHeight, tl.["init"])
 
         ctx.drawLongText([
-            [ (funcDecl, "boolToString "); (operator, ":: "); (typeDecl, "Bool"); (operator, " -> "); (typeDecl, "String") ]
-            [ (text, "boolToString ")]
+            [ style funcDecl "boolToString "; style operator ":: "; style typeDecl "Bool"; style operator " -> "; style typeDecl "String" ]
+            [ style text "boolToString "]
         ], 100., 100. + 7. * ctx.actualLineHeight, tl.["init"])
 
         ctx.drawLongText([
-            [ (text, "             value = toString (toInt value)") ]
+            [ style text "             value = toString (toInt value)" ]
         ], 100., 100. + 8. * ctx.actualLineHeight, tl.["composition"])
 
         ctx.drawLongText([
-            [ (text, "             = toString . toInt") ]
+            [ style text "             = toString . toInt" ]
         ], 100., 100. + 8. * ctx.actualLineHeight, tl.["pointFreeComposition"])
 
         let mathPos = 100. + 9.4 * ctx.actualLineHeight
@@ -898,9 +925,9 @@ let typesCategory = scene "typesCategory" {
     })
     render (fun (ctx : CanvasRenderingContext2D) tl ->
         ctx.globalAlpha <- tl.["opacity"]
-        ctx |> node "Bool" 250. 700. LeftUnder tl.["objects"]
-        ctx |> node "Unit" 800. 700. RightUnder tl.["objects"]
-        ctx |> node "Void" 525. 300. CenterAbove tl.["objects"]
+        ctx.node ("Bool", 250., 700., LeftUnder, tl.["objects"])
+        ctx.node ("Unit", 800., 700., RightUnder, tl.["objects"])
+        ctx.node ("Void", 525., 300., CenterAbove, tl.["objects"])
 
         ctx.setStyle (color "#fff")
         ctx.lineWidth <- 5.            
@@ -922,9 +949,6 @@ let typesCategory = scene "typesCategory" {
         ctx.highlightedArrow (560., 300., 800., 665., -100., tl.["absurd_unit"], tl.["highlight_void_unit_path"])
     )
 }
-
-let inline interpolate a0 a1 w =
-    (float a1 - float a0) * w + float a0
 
 let compositionRules = scene "compositionRules" {
     enter (animation {
@@ -998,10 +1022,10 @@ let associativity = scene "associativity" {
 
         // Objects
         let middle = ctx.height / 2.
-        ctx |> node "" 200. (middle - 200.) CenterUnder tl.["init"]
-        ctx |> node "" 600. (middle - 200.) CenterUnder tl.["init"]
-        ctx |> node "" 600. (middle + 200.) CenterUnder tl.["init"]
-        ctx |> node "" 200. (middle + 200.) CenterUnder tl.["init"]
+        ctx.node ("", 200., middle - 200., CenterUnder, tl.["init"])
+        ctx.node ("", 600., middle - 200., CenterUnder, tl.["init"])
+        ctx.node ("", 600., middle + 200., CenterUnder, tl.["init"])
+        ctx.node ("", 200., middle + 200., CenterUnder, tl.["init"])
 
         // Morphism styling
         ctx.strokeStyle <- color "#fff"
@@ -1052,15 +1076,15 @@ let associativity = scene "associativity" {
         ctx.textBaseline <- "middle"
         ctx.lineWidth <- 1.
         ctx.drawLongText([
-            [ (rgba (cp t gh tl.["hi_gh"]), "(")
-              (rgba (cp (cp w h tl.["hi_h"]) gh tl.["hi_gh"]), "h") 
-              (rgba (cp w gh tl.["hi_gh"]), " \u2218")
-              (rgba (cp t fg tl.["hi_fg"]), "(")
-              (rgba (cp (cp (cp w g tl.["hi_g"]) gh tl.["hi_gh"]) fg tl.["hi_fg"]), "g")
-              (rgba (cp t gh tl.["hi_gh"]), ")")
-              (rgba (cp w fg tl.["hi_fg"]), "\u2218 ")
-              (rgba (cp (cp w f tl.["hi_f"]) fg tl.["hi_fg"]), "f")
-              (rgba (cp t fg tl.["hi_fg"]), ")") ]
+            [ (Some (rgba (cp t gh tl.["hi_gh"])), None, "(")
+              (Some (rgba (cp (cp w h tl.["hi_h"]) gh tl.["hi_gh"])), None, "h") 
+              (Some (rgba (cp w gh tl.["hi_gh"])), None, " \u2218")
+              (Some (rgba (cp t fg tl.["hi_fg"])), None, "(")
+              (Some (rgba (cp (cp (cp w g tl.["hi_g"]) gh tl.["hi_gh"]) fg tl.["hi_fg"])), None, "g")
+              (Some (rgba (cp t gh tl.["hi_gh"])), None, ")")
+              (Some (rgba (cp w fg tl.["hi_fg"])), None, "\u2218 ")
+              (Some (rgba (cp (cp w f tl.["hi_f"]) fg tl.["hi_fg"])), None, "f")
+              (Some (rgba (cp t fg tl.["hi_fg"])), None, ")") ]
         ], 750., middle, tl.["mathEnter"])
     )
 }
@@ -1072,14 +1096,14 @@ let identity = scene "identity" {
     })
     run (animation {
         // 5:51
-        0 => fadeIn 750 Linear "id_f"
+        0 => fadeIn 750 Linear "f_id"
         0 => fadeIn 750 Linear "hi_id_f"
 
         // 5:56,5
         5500 => fadeOut 500 Linear "hi_id_f"
 
         // 5:59
-        8000 => fadeIn 750 Linear "f_id"
+        8000 => fadeIn 750 Linear "id_f"
         8000 => fadeIn 750 Linear "hi_f_id"
 
         // 6:04,5
@@ -1099,10 +1123,10 @@ let identity = scene "identity" {
 
         // Objects
         let middle = ctx.height / 2.
-        ctx |> node "" 200. (middle - 200.) CenterUnder 1.
-        ctx |> node "" 600. (middle - 200.) CenterUnder 1.
-        ctx |> node "" 600. (middle + 200.) CenterUnder 1.
-        ctx |> node "" 200. (middle + 200.) CenterUnder 1.
+        ctx.node ("", 200., middle - 200., CenterUnder, 1.)
+        ctx.node ("", 600., middle - 200., CenterUnder, 1.)
+        ctx.node ("", 600., middle + 200., CenterUnder, 1.)
+        ctx.node ("", 200., middle + 200., CenterUnder, 1.)
 
         // Morphism styling
         ctx.strokeStyle <- color "#fff"
@@ -1135,8 +1159,8 @@ let identity = scene "identity" {
         ctx.font <- mathFont 80
         ctx.textBaseline <- "top"
         ctx.lineWidth <- 1.
-        ctx.drawText("id \u2218 f = f", 750., middle - ctx.actualLineHeight, tl.["id_f"])
-        ctx.drawText("f \u2218 id = f", 750., middle, tl.["f_id"])
+        ctx.drawText("f \u2218 id = f", 750., middle - ctx.actualLineHeight, tl.["f_id"])
+        ctx.drawText("id \u2218 f = f", 750., middle, tl.["id_f"])
     )
 }
 
@@ -1233,8 +1257,8 @@ let kleisliWriter = scene "kleisliWriter" {
         ctx.stroke ()
         ctx.restore ()
 
-        ctx |> node "a" 250. kleisli LeftUnder (stagger 2 1 tl.["init"])
-        ctx |> node "b" 600. kleisli RightUnder (stagger 2 1 tl.["init"])
+        ctx.node ("a", 250., kleisli, LeftUnder, (stagger) 2 1 tl.["init"])
+        ctx.node ("b", 600., kleisli, RightUnder, (stagger) 2 1 tl.["init"])
         ctx.arrow (285., kleisli, 565., kleisli, -50., tl.["a->b"])
 
         let d = sqrt (45.**2. / 2.)
@@ -1253,4 +1277,392 @@ let kleisliWriter = scene "kleisliWriter" {
 let v03_kleisli =
     [ kleisliWriter ]
 
-let scenes = v02_categories
+let writerI = scene "writerI" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+
+        ctx.textBaseline <- "top"
+        ctx.font <- codeFont 65
+        ctx.drawLongText([
+            [ style keyword "interface "; style typeDecl "Writer"; style text "<"; style typeDecl "A"; style text "> {" ]
+            [ style var "  res"; style text ": "; style typeDecl "A"; style text ";" ]
+            [ style var "  logger"; style text ": "; style typeDecl "string"; style text ";" ]
+            [ style text "}" ]
+        ], 100., ctx.height / 2. - 2. * ctx.actualLineHeight, tl.["init"])
+
+        ctx |> drawLanguageIndicator "TypeScript" tl.["init"]
+    )
+}
+
+let listMap = scene "listMap" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+        0 => fadeIn 750 Linear "long"
+    })
+    run (animation {
+        0 => fadeOut 750 Linear "long"
+        250 => fadeIn 750 Linear "short"
+        500 => fadeIn 750 EaseInOutQuad "pos"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.textBaseline <- "top"
+        ctx.font <- codeFont 65
+        let textY = interpolate (ctx.height / 2. - 1.5 * ctx.actualLineHeight) 100. tl.["pos"]
+        let text = color "#fff"
+
+        ctx.drawLongText([
+            [ style text "List.map" ]
+        ], 100., textY, tl.["init"])
+
+        ctx.drawLongText([
+            [ ]
+            [ style keyword "  (fun "; style var "x"; style keyword " -> "; style text "x"; style keyword " * "; style text "x"; style keyword ")" ]
+            [ style keyword "  [ "; style numberLit "0"; style keyword " .. "; style numberLit "10"; style keyword " ]" ]
+        ], 100., textY, tl.["long"])
+
+        ctx.drawLongText([
+            [ style text "         f list" ]
+        ], 100., textY, tl.["short"])
+
+
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx |> drawLanguageIndicator "F#" tl.["init"]
+    )
+}
+
+type CanvasRenderingContext2D with
+    member ctx.blockArrow (pX, pY, width, height, ?progress, ?direction) =
+        let progress = defaultArg progress 1.
+        let direction = defaultArg direction 0.
+        if progress > 0. then
+            ctx.save ()
+            ctx.translate (pX, pY + (1. - progress) * height)
+            ctx.rotate (direction)
+            ctx.moveTo (0., 0.)
+            ctx.lineTo (-0.5 * width * progress, 0.5 * width * progress)
+            ctx.moveTo (0., 0.)
+            ctx.lineTo (0.5 * width * progress, 0.5 * width * progress)
+            ctx.moveTo (-0.25 * width * progress, 0.25 * width * progress)
+            ctx.lineTo (-0.25 * width, height * progress)
+            ctx.moveTo (0.25 * width * progress, 0.25 * width * progress)
+            ctx.lineTo (0.25 * width, height * progress)
+            ctx.restore()
+    member ctx.cloud col x y width height progress =
+        ctx.save ()
+        ctx.globalAlpha <- ctx.globalAlpha * progress
+        ctx.strokeStyle <- color "#fff"
+        ctx.fillStyle <- col
+        ctx.lineWidth <- 3.
+        ctx.beginPath ()
+        ctx.fluffyEllipse (x, y, width, height)
+        ctx.fill ()
+        ctx.stroke ()
+        ctx.restore ()
+    member ctx.label (serifText, mathText, x, y, ?progress) =
+        ctx.save ()
+        ctx.lineWidth <- 1.
+        ctx.font <- serifFont 55
+        let serifWidth = ctx.measureText(serifText).width
+        ctx.font <- mathFont 55
+        let mathWidth = ctx.measureText(mathText).width
+        let width = serifWidth + mathWidth
+        ctx.drawLongText ([[ font (serifFont 55) serifText; font (mathFont 55) mathText ]], x - 0.5 * width, y, ?progress = progress)
+        ctx.restore ()
+
+let listFunctor = scene "listFunctor" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+    })
+    run (animation {
+        0 => fadeIn 750 EaseOutQuad "func_f"
+        1000 => fadeIn 750 EaseOutQuad "functor"
+        1500 => fadeIn 750 Linear "cat_list"
+        3000 => fadeIn 750 EaseOutQuad "func_mapf"
+        4000 => fadeIn 750 Linear "func_mapf_math"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.textBaseline <- "top"
+        ctx.font <- codeFont 65
+        ctx.setStyle (color "#fff")
+        ctx.fillText ("List.map f list", 100., 100.)
+
+        let top = ctx.height * (1./3.)
+        let middle = ctx.height * (1./2.) + 50.
+        let bottom = ctx.height * (2./3.) + 100.
+
+        ctx.nodeSize <- 15.
+        ctx.lineWidth <- 3.
+
+        ctx.cloud (color "#def5") 400. bottom 200. 100. tl.["init"]
+        ctx.node ("a", 300., bottom, LeftUnder, tl.["init"], 55)
+        ctx.node ("b", 500., bottom - 15., RightUnder, tl.["func_f"], 55)
+
+        ctx.nodeArrow (300., bottom, 500., bottom - 15., -20., tl.["func_f"])
+        ctx.save ()
+        ctx.lineWidth <- 1.
+        ctx.font <- mathFont 55
+        ctx.textBaseline <- "alphabetic"
+        let func = "f"
+        let funcWidth = ctx.measureText(func).width
+        ctx.drawText (func, 400. - 0.5 * funcWidth, bottom - 30., tl.["func_f"])
+        ctx.restore ()
+
+        ctx.save ()
+        ctx.lineWidth <- 5.
+        ctx.beginPath ()
+        ctx.blockArrow (400., middle - 30., 60., 80., tl.["functor"])
+        ctx.stroke ()
+        ctx.lineWidth <- 1.
+        ctx.font <- serifFont 65
+        ctx.textBaseline <- "center"
+        ctx.drawText ("List", 450., middle - 10., tl.["functor"])
+        ctx.restore ()
+
+        ctx.cloud (color "#fdf5") 400. top 250. 120. tl.["cat_list"]
+        ctx.node ("List a", 260., top, CenterUnder, tl.["cat_list"], 45)
+        ctx.node ("List b", 550., top - 15., CenterUnder, tl.["cat_list"], 45)
+        
+        ctx.nodeArrow (260., top, 550., top - 15., -20., tl.["func_mapf"])
+        ctx.save ()
+        ctx.lineWidth <- 1.
+        ctx.textBaseline <- "alphabetic"
+        ctx.font <- codeFont 40
+        let code = "List.map"
+        let codeWidth = ctx.measureText(code).width
+        ctx.font <- mathFont 50
+        let func = " " + func
+        let funcWidth = ctx.measureText(func).width
+        ctx.font <- serifFont 45
+        let functor = "List"
+        let functorWidth = ctx.measureText(functor).width
+        let codeX = 400. - 0.5 * (interpolate codeWidth functorWidth tl.["func_mapf_math"] + funcWidth)
+        let funcX = codeX + (interpolate codeWidth functorWidth tl.["func_mapf_math"])
+        ctx.font <- codeFont 40
+        ctx.drawText (code, codeX, top - 30., tl.["func_mapf"] - tl.["func_mapf_math"])
+        ctx.font <- mathFont 50
+        ctx.drawText (func, funcX, top - 30., tl.["func_mapf"])
+        ctx.font <- serifFont 45
+        ctx.drawText (functor, codeX, top - 30., tl.["func_mapf_math"])
+        ctx.restore ()
+    )
+}
+
+let functorPreservesStructure = scene "functorPreservesStructure" {
+    enter (animation {
+        0 => fadeIn 750 EaseOutQuad "init"
+    })
+    run (animation {
+        0 => fadeIn 750 EaseOutQuad "h"
+        1000 => fadeIn 750 EaseOutQuad "functor"
+        1500 => fadeIn 750 Linear "catF"
+        3000 => fadeIn 750 EaseOutQuad "catF_funcs"
+        4000 => fadeIn 750 EaseOutQuad "Fh"
+        5000 => fadeIn 750 Linear "Fh_comp"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        let top = ctx.height * (1./3.) - 100.
+        let middle = ctx.height * (1./2.)
+        let bottom = ctx.height * (2./3.) + 100.
+
+        ctx.setStyle (color "#fff")
+        ctx.nodeSize <- 15.
+        ctx.lineWidth <- 3.
+
+        ctx.cloud (color "#def5") 400. bottom 270. 160. tl.["init"]
+        ctx.node ("a", 220., bottom, LeftAbove, tl.["init"], 55)
+        ctx.node ("b", 415., bottom + 75., CenterUnder, tl.["init"], 55)
+        ctx.node ("c", 560., bottom - 20., RightAbove, tl.["init"], 55)
+        ctx.nodeArrow (220., bottom, 415., bottom + 75., -10., tl.["init"])
+        ctx.textBaseline <- "top"
+        ctx.label ("", "f", 305., bottom + 45., tl.["init"])
+        ctx.nodeArrow (415., bottom + 75., 560., bottom - 20., -15., tl.["init"])
+        ctx.label ("", "g", 492., bottom + 20., tl.["init"])
+        ctx.nodeArrow (220., bottom, 560., bottom - 20., -50., tl.["h"])
+        ctx.textBaseline <- "alphabetic"
+        ctx.label ("", "h", 390., bottom - 50., tl.["h"])
+
+        ctx.save ()
+        ctx.lineWidth <- 5.
+        ctx.beginPath ()
+        ctx.blockArrow (400., middle - 40., 60., 80., tl.["functor"])
+        ctx.stroke ()
+        ctx.lineWidth <- 1.
+        ctx.font <- serifFont 65
+        ctx.textBaseline <- "middle"
+        ctx.drawText ("F", 450., middle + 10., tl.["functor"])
+        ctx.restore ()
+
+        ctx.cloud (color "#fdf5") 400. top 270. 160. tl.["catF"]
+        ctx.node ("Fa", 220., top, CenterAbove, tl.["catF"], 55)
+        ctx.node ("Fb", 415., top + 75., CenterUnder, tl.["catF"], 55)
+        ctx.node ("Fc", 560., top - 20., CenterAbove, tl.["catF"], 55)
+        ctx.nodeArrow (220., top, 415., top + 75., -10., tl.["catF_funcs"])
+        ctx.textBaseline <- "top"
+        ctx.label ("F", "f", 305., top + 50., tl.["catF_funcs"])
+        ctx.nodeArrow (415., top + 75., 560., top - 20., -15., tl.["catF_funcs"])
+        ctx.label ("F", "g", 510., top + 30., tl.["catF_funcs"])
+        ctx.nodeArrow (220., top, 560., top - 20., -50., tl.["Fh"])
+        ctx.textBaseline <- "alphabetic"
+        ctx.label ("F", "h", 390., top - 50., tl.["Fh"])
+
+        ctx.textBaseline <- "middle"
+        let s = serifFont 55
+        let m = mathFont 60
+        ctx.font <- m
+        ctx.drawText ("h = g \u2218 f", 800., bottom, tl.["h"])
+        ctx.drawLongText ([[ font s "F"; font m "h = "; font s "F"; font m "g \u2218 "; font s "F"; font m "f" ]], 800., top, tl.["Fh_comp"])
+    )
+}
+
+let functorPreservesIdentity = scene "functorPreservesIdentity" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+        500 => fadeIn 750 EaseOutQuad "id_a"
+    })
+    run (animation {
+        0 => fadeIn 750 Linear "functor"
+        500 => fadeIn 750 Linear "catF"
+        2000 => fadeIn 750 EaseOutQuad "id_Fa"
+        3000 => fadeIn 750 Linear "id_eq"
+    })
+    leave (animation {
+        0 => fadeOut 750 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+        ctx.setStyle (color "#fff")
+        ctx.nodeSize <- 15.
+        ctx.lineWidth <- 3.
+        ctx.font <- serifFont 55
+        let d = sqrt (30.**2. / 2.)
+        let top = ctx.height * (1./3.) - 100.
+        let middle = ctx.height * (1./2.)
+        let bottom = ctx.height * (2./3.) + 100.
+        let idLabel fz x y sub progress =
+            let id' = "id"
+            let idWidth = ctx.measureText(id').width
+            ctx.save ()
+            ctx.lineWidth <- 1.
+            ctx.font <- mathFont fz
+            ctx.drawText(id', x, y, staggeredProgress 0.5 2 0 progress)
+            ctx.font <- serifFont (int (0.75 * float fz))
+            let subWidth = ctx.measureText(sub).width
+            ctx.drawText(sub, x + idWidth, y + 10., staggeredProgress 0.5 2 1 progress)
+            ctx.restore ()
+            idWidth + subWidth
+        let drawTextWidth text x y progress =
+            ctx.drawText (text, x, y, progress)
+            ctx.measureText(text).width
+        
+        ctx.cloud (color "#def5") 400. bottom 150. 150. tl.["init"]
+        ctx.node ("a", 370., bottom + 20., LeftUnder, tl.["init"], 55)
+        ctx.arcArrow (370. + d, bottom + 20. - d, 20., Math.PI, (1. + 1.5 * tl.["id_a"]) * Math.PI)
+        idLabel 55 (370. + d) (bottom - 2. * d) "a" tl.["id_a"] |> ignore
+
+        ctx.save ()
+        ctx.lineWidth <- 5.
+        ctx.beginPath ()
+        ctx.blockArrow (400., middle - 40., 60., 80., tl.["functor"])
+        ctx.stroke ()
+        ctx.lineWidth <- 1.
+        ctx.font <- serifFont 65
+        ctx.textBaseline <- "middle"
+        ctx.drawText ("F", 450., middle + 10., tl.["functor"])
+        ctx.restore ()
+
+        ctx.cloud (color "#fdf5") 400. top 150. 150. tl.["catF"]
+        ctx.node ("Fa", 370., top + 20., LeftUnder, tl.["catF"], 55)
+        ctx.arcArrow (370. + d, top + 20. - d, 20., Math.PI, (1. + 1.5 * tl.["id_Fa"]) * Math.PI)
+        idLabel 55 (370. + d) (top - 2. * d) "Fa" tl.["id_Fa"] |> ignore
+
+        ctx.font <- serifFont 70
+        let s = staggeredProgress 0.5 4
+        let y = top - 2. * d
+        let x = 650.
+        let x = x + idLabel 70 x y "Fa" (s 0 tl.["id_eq"])
+        let x = x + drawTextWidth " = " x y (s 1 tl.["id_eq"])
+        let x = x + drawTextWidth "F" x y (s 2 tl.["id_eq"])
+        let x = x + idLabel 70 x y "a" (s 3 tl.["id_eq"])
+        ()
+    )
+}
+
+let functorComposition = scene "functorComposition" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+    })
+    run (animation {
+        0 => fadeIn 750 EaseOutQuad "functor"
+        500 => fadeIn 750 Linear "cat_Writer"
+        1000 => fadeIn 750 EaseOutQuad "cat_Writer_f"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.globalAlpha <- tl.["opacity"]
+
+        let top = ctx.height * (1./3.) - 50.
+        let middle = ctx.height * (1./2.)
+        let bottom = ctx.height * (2./3.) + 50.
+
+        ctx.setStyle (color "#fff")
+        ctx.nodeSize <- 15.
+        ctx.lineWidth <- 3.
+
+        ctx.cloud (color "#fdf5") 400. bottom 250. 120. tl.["init"]
+        ctx.node ("List a", 260., bottom, CenterUnder, tl.["init"], 45)
+        ctx.node ("List b", 550., bottom - 15., CenterUnder, tl.["init"], 45)
+        
+        ctx.nodeArrow (260., bottom, 550., bottom - 15., -20., tl.["init"])
+        ctx.save ()
+        ctx.lineWidth <- 1.
+        ctx.textBaseline <- "alphabetic"
+        ctx.drawLongText ([[ font (serifFont 45) "List "; font (mathFont 50) "f" ]], 340., bottom - 30., tl.["init"])
+        ctx.restore ()
+
+        ctx.save ()
+        ctx.lineWidth <- 5.
+        ctx.beginPath ()
+        ctx.blockArrow (400., middle - 40., 60., 80., tl.["functor"])
+        ctx.stroke ()
+        ctx.lineWidth <- 1.
+        ctx.font <- serifFont 65
+        ctx.textBaseline <- "middle"
+        ctx.drawText ("Writer", 450., middle + 10., tl.["functor"])
+        ctx.restore ()
+
+        ctx.cloud (color "#efe5") 400. top 300. 120. tl.["cat_Writer"]
+        ctx.node ("Writer List a", 260., top, CenterUnder, tl.["cat_Writer"], 45)
+        ctx.node ("Writer List b", 550., top - 15., CenterUnder, tl.["cat_Writer"], 45)
+
+        ctx.nodeArrow (260., top, 550., top - 15., -20., tl.["cat_Writer_f"])
+        ctx.save ()
+        ctx.lineWidth <- 1.
+        ctx.textBaseline <- "alphabetic"
+        ctx.drawLongText ([[ font (serifFont 45) "Writer List "; font (mathFont 50) "f" ]], 270., top - 40., tl.["cat_Writer_f"])
+        ctx.restore ()
+    )
+}
+
+let v04_functors =
+    [ writerI; listMap; listFunctor; functorPreservesStructure; functorPreservesIdentity; functorComposition ]
+
+let scenes = v04_functors

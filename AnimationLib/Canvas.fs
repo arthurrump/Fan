@@ -14,7 +14,11 @@ let inline rgba (r, g, b, a) : Style =
 let inline color (str : string) : Style = 
     U3.Case1 str
 
-let private quadraticControlPoint fromX fromY toX toY cpDist =
+let style style s = (Some style, None, s)
+let font font s = (None, Some font, s)
+let styleFont style font s = (Some style, Some font, s)
+
+let quadraticControlPoint fromX fromY toX toY cpDist =
     let center = fromX + (toX - fromX) / 2., fromY + (toY - fromY) / 2.
     let perp = -(toY - fromY), (toX - fromX)
     let perpl = sqrt((fst perp)**2. + (snd perp)**2.)
@@ -31,7 +35,7 @@ let private quadraticProgress progress =
     fun start control end' -> t02 * start + t03 * control + t00 * end'
 
 // https://www.pjgalbraith.com/drawing-animated-curves-javascript/
-let private quadraticProgressPoints fromX fromY cX cY toX toY progressStart progressEnd=
+let quadraticProgressPoints fromX fromY cX cY toX toY progressStart progressEnd=
     if progressStart = 0. && progressEnd = 1. then
         (fromX, fromY, cX, cY, toX, toY)
     elif progressStart = progressEnd then
@@ -46,6 +50,12 @@ let private quadraticProgressPoints fromX fromY cX cY toX toY progressStart prog
         let nCX = lerp (lerp fromX cX progressStart) (lerp cX toX progressStart) progressEnd
         let nCY = lerp (lerp fromY cY progressStart) (lerp cY toY progressStart) progressEnd
         (nFromX, nFromY, nCX, nCY, nToX, nToY)
+
+let bezierLineSegments segments fromX fromY cX cY toX toY =
+    let d = 1. / float segments
+    [ for i in 0. .. d .. (1. - d) -> 
+        let (fromX, fromY, _, _, toX, toY) = quadraticProgressPoints fromX fromY cX cY toX toY i (i + d)
+        (fromX, fromY), (toX, toY) ]
 
 let private limit bottom top = max bottom >> min top
 
@@ -180,18 +190,23 @@ type CanvasRenderingContext2D with
             |> Seq.indexed
             |> Seq.map (fun (i, ch) -> ch, staggeredProgress stagger text.Length i progress)
         ctx.drawText (textProgress, x, y)
-    member ctx.drawLongText (text : (Style * string) list list, x, y, ?progress, ?stagger) = 
+    member ctx.drawLongText (text : (Style option * string option * string) list list, x, y, ?progress, ?stagger) = 
         let progress = defaultArg progress 1.
         let stagger = defaultArg stagger 0.5
-        let charCountPerBlock = text |> List.map (List.map (snd >> String.length))
+        let charCountPerBlock = text |> List.map (List.map (fun (_, _, s) -> String.length s))
         let charCountPerLine = charCountPerBlock |> List.map List.sum
         let charCountTotal = charCountPerLine |> List.sum
         for li, line in text |> List.indexed do
             let y = y + float li * ctx.actualLineHeight
-            let textSizes = line |> List.map (fun (_, str) -> ctx.measureText(str).width)
+            let textSizes = 
+                line 
+                |> List.map (fun (_, font, str) -> 
+                    font |> Option.iter (fun font -> ctx.font <- font)
+                    ctx.measureText(str).width
+                )
             let lineStartIndex = charCountPerLine.[0..li-1] |> List.sum
             for i in 0 .. line.Length - 1 do
-                let (style, text) = line.[i]
+                let (style, font, text) = line.[i]
                 let x = x + (textSizes.[0..i-1] |> List.sum)
                 let blockStartIndex = lineStartIndex + (charCountPerBlock.[li].[0..i-1] |> List.sum)
                 let textProgress =
@@ -199,7 +214,8 @@ type CanvasRenderingContext2D with
                     |> Seq.indexed
                     |> Seq.map (fun (i, ch) -> ch, staggeredProgress stagger charCountTotal (blockStartIndex + i) progress)
                 ctx.save ()
-                ctx.setStyle (style)
+                style |> Option.iter ctx.setStyle
+                font |> Option.iter (fun font -> ctx.font <- font)
                 ctx.drawText (textProgress, x, y)
                 ctx.restore ()
     member ctx.fluffyCircle (cX, cY, radius, ?fluffSize, ?seed) =
