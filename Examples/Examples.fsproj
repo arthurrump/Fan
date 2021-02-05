@@ -5,7 +5,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="src/CTP.fs" />
+    <Compile Include="src/CTP/Shared.fs" />
+    <Compile Include="src/CTP/V1.fs" />
+    <Compile Include="src/CTP/V2.fs" />
+    <Compile Include="src/CTP/V3.fs" />
+    <Compile Include="src/CTP/V4.fs" />
+    <Compile Include="src/CTP/V5.fs" />
     <Compile Include="src/App.fs" />
   </ItemGroup>
 

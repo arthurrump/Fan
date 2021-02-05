@@ -225,6 +225,8 @@ let arrow = scene "test-Arrow" {
     )
 }
 
+open CTP.Shared
+
 let helloWorld = scene "test-helloWorld" {
     run (timeline' (Alternate, Infinite) {
         1000 => vars {
@@ -236,7 +238,7 @@ let helloWorld = scene "test-helloWorld" {
         3000 => []
     })
     render (fun (ctx : CanvasRenderingContext2D) tl t ->
-        ctx.font <- CTP.serifFont 200
+        ctx.font <- serifFont 200
         ctx.setStyle (color "#fff")
         ctx.textBaseline <- "middle"
 
@@ -260,10 +262,10 @@ let haskell = scene "test-haskell" {
         ctx.save ()
 
         let text = 
-            [ [ style CTP.CodeColors.funcDecl "id"; style CTP.CodeColors.operator " :: "; style CTP.CodeColors.var "a"; style CTP.CodeColors.operator " -> "; style CTP.CodeColors.var "a" ]
-              [ style CTP.CodeColors.text "id "; style CTP.CodeColors.text "x"; style CTP.CodeColors.text " = "; style CTP.CodeColors.text "x" ] ]
+            [ [ style funcDecl "id"; style operator " :: "; style var "a"; style operator " -> "; style var "a" ]
+              [ style text "id "; style text "x"; style text " = "; style text "x" ] ]
         
-        ctx.font <- CTP.codeFont 200
+        ctx.font <- codeFont 200
         ctx.setStyle (color "#fff")
         ctx.textBaseline <- "top"
         ctx.drawLongText (text, 100., (ctx.height - float text.Length * ctx.actualLineHeight * 1.2) / 2., tl.["progress"])
@@ -279,6 +281,7 @@ let settings =
           Framerate = 25.</s> }
       BackgroundColor = "#000" }
 
+module CTP = CTP.V4
 CTP.scenes
 |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.clear ()
