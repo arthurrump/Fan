@@ -274,17 +274,18 @@ type CanvasRenderingContext2D with
         let progress = defaultArg progress 1.
         let direction = defaultArg direction 0.
         if progress > 0. then
+            let dY = (1. - progress) * height
             ctx.save ()
-            ctx.translate (pX, pY + (1. - progress) * height)
+            ctx.translate (pX, pY)
             ctx.rotate (direction)
-            ctx.moveTo (0., 0.)
-            ctx.lineTo (-0.5 * width * progress, 0.5 * width * progress)
-            ctx.moveTo (0., 0.)
-            ctx.lineTo (0.5 * width * progress, 0.5 * width * progress)
-            ctx.moveTo (-0.25 * width * progress, 0.25 * width * progress)
-            ctx.lineTo (-0.25 * width, height * progress)
-            ctx.moveTo (0.25 * width * progress, 0.25 * width * progress)
-            ctx.lineTo (0.25 * width, height * progress)
+            ctx.moveTo (0., dY)
+            ctx.lineTo (-0.5 * width * progress, 0.5 * width * progress + dY)
+            ctx.moveTo (0., dY)
+            ctx.lineTo (0.5 * width * progress, 0.5 * width * progress + dY)
+            ctx.moveTo (-0.25 * width * progress, 0.25 * width * progress + dY)
+            ctx.lineTo (-0.25 * width, height)
+            ctx.moveTo (0.25 * width * progress, 0.25 * width * progress + dY)
+            ctx.lineTo (0.25 * width, height)
             ctx.restore()
     member ctx.cloud col x y width height progress =
         ctx.save ()

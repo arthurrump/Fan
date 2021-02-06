@@ -97,5 +97,38 @@ let monad = scene "monad" {
     )
 }
 
+let natTransf = scene "natTransf" {
+    enter (animation {
+        0 => fadeIn 750 Linear "init"
+        250 => fadeIn 750 EaseOutQuad "functor"
+        500 => fadeIn 750 EaseOutQuad "natTransf"
+    })
+    leave (animation {
+        0 => fadeOut 500 Linear "opacity"
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl -> 
+        ctx.globalAlpha <- tl.["opacity"]
+        let middle = ctx.height / 2.
+        ctx.setStyle (color "#fff")
+        ctx.lineWidth <- 3.
+        
+        ctx.node ("C", 200., middle, LeftUnder, tl.["init"])
+        ctx.node ("D", 500., middle, RightUnder, tl.["init"])
+        ctx.nodeArrow (200., middle, 500., middle, -150., tl.["functor"])
+        ctx.nodeArrow (200., middle, 500., middle, 150., tl.["functor"])
+
+        ctx.beginPath ()
+        ctx.blockArrow (350., middle + 40., 40., 80., tl.["natTransf"], Math.PI)
+        ctx.stroke ()
+
+        ctx.lineWidth <- 1.
+        ctx.font <- serifFont 60
+        ctx.textBaseline <- "middle"
+        ctx.drawText ("\u03b1", 380., middle, tl.["natTransf"])
+    )
+}
+
+
+
 let scenes =
-    [ monad ]
+    [ monad; natTransf ]
