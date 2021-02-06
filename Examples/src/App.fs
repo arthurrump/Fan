@@ -286,7 +286,7 @@ CTP.scenes
 |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
     ctx.clear ()
     ctx.save ()
-    ctx |> grid 100. (color "#eee")
+    // ctx |> grid 100. (color "#eee")
     render ctx tl t
     ctx.restore ()
 ))
