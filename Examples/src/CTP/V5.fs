@@ -15,10 +15,10 @@ let monad = scene "monad" {
         1250 => fadeIn 750 EaseOutQuad "catF_funcs"
     })
     run (animation {
-        0 => fadeIn 750 Linear "subcat"
-        1000 => fadeIn 750 EaseOutQuad "catK"
-        2000 => fadeIn 750 Linear "catK_fl"
-        3000 => fadeIn 750 EaseOutQuad "monad"
+        0 => fadeIn 750 Linear "subcat" // 0:30
+        17500 => fadeIn 750 EaseOutQuad "catK" // 0:47.5
+        23000 => fadeIn 750 Linear "catK_fl" // 0:53
+        38500 => fadeIn 750 EaseOutQuad "monad" // 1:08.5
     })
     leave (animation {
         0 => fadeOut 500 Linear "opacity"
