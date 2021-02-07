@@ -101,6 +101,8 @@ type CanvasRenderingContext2D with
     member ctx.setStyle (style) =
         ctx.strokeStyle <- style
         ctx.fillStyle <- style
+    member ctx.style with get () = if ctx.strokeStyle = ctx.fillStyle then Some ctx.strokeStyle else None
+    member ctx.style with set (value) = ctx.setStyle value
     member ctx.clear () =
         ctx.clearRect (0., 0., ctx.width, ctx.height)
     member ctx.background (?color) =
