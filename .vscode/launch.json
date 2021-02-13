@@ -10,7 +10,7 @@
         "request": "launch",
         "preLaunchTask": "build",
         "program": "${workspaceFolder}/FFmpegServer/bin/Debug/net5.0/FFmpegServer.dll",
-        "args": [ "-o",  "D:\\Arthur\\Desktop\\Test", "--ffargs", "\"-y\"" ],
+        "args": [ ],
         "cwd": "${workspaceFolder}",
         "stopAtEntry": false,
         "console": "externalTerminal"
