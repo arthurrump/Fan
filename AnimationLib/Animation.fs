@@ -30,6 +30,8 @@ module Map =
         map1 |> Map.fold (fun map2 key value -> map2 |> Map.add key value) map2
     let keys map =
         map |> Map.toList |> List.map fst
+    let mapKey f map =
+        map |> Map.toList |> List.map (fun (k, v) -> (f k, v)) |> Map.ofList
 
 [<CustomEquality; NoComparison>]
 type Easing = 
@@ -129,9 +131,19 @@ type VarsBuilder<'t>() =
 
 let vars<'t> = VarsBuilder<'t>()
 
+module Var =
+    let map (f: 'a -> 'b) ((t, key): Var<'a>) : Var<'b> =
+        (f t, key)
+
 type Timestamp<'t> = float * Var<'t> list
 
+module Timestamp =
+    let map (f: 'a -> 'b) ((t, vars): Timestamp<'a>) : Timestamp<'b> =
+        (t, vars |> List.map (Var.map f))
+
 module Timestamps =
+    let map f = List.map (Timestamp.map f)
+
     let duration (ts : Timestamp<'t> list) =
         ts |> List.map fst |> List.maxOrDefault 0.
 
@@ -237,6 +249,10 @@ type Timeline<'t> =
       Loop : Timestamp<'t> list }
 
 module Timeline =
+    let map f tl =
+        { Initial = Timestamps.map f tl.Initial
+          Loop = Timestamps.map f tl.Loop }
+
     let inline delay delay tl =
         { tl with Initial = Timestamps.delay delay tl.Initial }
     
@@ -376,6 +392,9 @@ type Animation<'t when 't : comparison>(timeline : Timeline<'t>, initials : Map<
     member __.Item (var) = 
         animationFunction.Value var
 
+    member __.Map (f) =
+        Animation (Timeline.map f timeline, Map.mapKey f initials)
+
     interface IEquatable<Animation<'t>> with
         member this.Equals (other) =
             this.Timeline = other.Timeline
@@ -406,6 +425,12 @@ let animationSingle (tl : Timeline<'t>) = animation.Yield (tl) |> animation.Run
 type IAnimationValueProvider<'t when 't : comparison> =
     abstract member Item : 't -> float
     abstract member Function : 't -> (float -> float)
+
+module IAnimationValueProvider =
+    let contramap (f: 'b -> 'a) (avp: IAnimationValueProvider<'a>) : IAnimationValueProvider<'b> =
+        { new IAnimationValueProvider<'b> with
+            member __.Item (var) = avp.Item (f var)
+            member __.Function (var) = avp.Function (f var)}
 
 [<CustomEquality; NoComparison>]
 type Scene<'t, 'r when 't : comparison> =
@@ -485,6 +510,13 @@ type SceneBuilder<'t, 'r when 't : comparison>(title : string) =
 let scene<'t, 'r when 't : comparison> title = SceneBuilder<'t, 'r> (title)
 
 module Scene =
+    let map (f: 'a -> 'b) (scene: Scene<'a, 'r>) : Scene<'b, 'r> =
+        { Title = scene.Title
+          EnterAnimation = scene.EnterAnimation.Map f
+          RunAnimation = scene.RunAnimation.Map f
+          LeaveAnimation = scene.LeaveAnimation.Map f
+          Render = fun r avp -> scene.Render r (IAnimationValueProvider.contramap f avp) }
+
     let getAnimationRenderFunction r anim scene =
         fun t ->
             scene.Render r ({ 
