@@ -1,4 +1,4 @@
-module Animation.Animation
+module Fan.Animation
 
 open System
 open Browser.Dom

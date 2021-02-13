@@ -1,7 +1,7 @@
-module Animation.App.Main
+module Fan.App.Main
 
-open Animation.Animation
-open Animation.Render
+open Fan.Animation
+open Fan.Render
 
 open System
 open Browser.Dom

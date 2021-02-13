@@ -2,8 +2,8 @@ module CTP.Shared
 
 open System
 open Browser.Types
-open Animation.Animation
-open Canvas
+open Fan.Animation
+open Fan.Canvas
 
 [<AutoOpen>]
 module CodeColors =

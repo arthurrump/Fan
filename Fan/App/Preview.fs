@@ -1,6 +1,6 @@
-module Animation.App.Preview
+module Fan.App.Preview
 
-open Animation.Animation
+open Fan.Animation
 
 open Browser.Dom
 open Browser.Types

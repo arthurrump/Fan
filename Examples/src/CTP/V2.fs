@@ -3,8 +3,8 @@ module CTP.V2
 open CTP.Shared
 open System
 open Browser.Types
-open Animation.Animation
-open Canvas
+open Fan.Animation
+open Fan.Canvas
 
 let composition = scene "composition" {
     run (animation {

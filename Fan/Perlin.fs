@@ -1,4 +1,4 @@
-module Perlin
+module Fan.Perlin
 
 // https://en.wikipedia.org/wiki/Perlin_noise
 

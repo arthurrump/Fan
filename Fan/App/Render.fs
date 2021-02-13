@@ -1,7 +1,7 @@
-module Animation.App.Render
+module Fan.App.Render
 
-open Animation.Animation
-open Animation.Render
+open Fan.Animation
+open Fan.Render
 
 open Elmish
 open Fable.React

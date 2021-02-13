@@ -1,4 +1,4 @@
-module Animation.Render
+module Fan.Render
 
 open FSharp.Data.UnitSystems.SI.UnitSymbols
 [<Measure>] type ms

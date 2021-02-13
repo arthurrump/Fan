@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AnimationLib\AnimationLib.fsproj" />
+    <ProjectReference Include="..\Fan\Fan.fsproj" />
   </ItemGroup>
 
 </Project>

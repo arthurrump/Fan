@@ -2,9 +2,9 @@ module App
 
 open FSharp.Data.UnitSystems.SI.UnitSymbols
 
-open Animation.Animation
-open Animation.App.Main
-open Canvas
+open Fan.Animation
+open Fan.App.Main
+open Fan.Canvas
 
 open System
 open Fable.Core

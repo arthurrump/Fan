@@ -1,4 +1,4 @@
-module Canvas
+module Fan.Canvas
 
 open System
 open Fable.Core
