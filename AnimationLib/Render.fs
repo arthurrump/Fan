@@ -128,6 +128,17 @@ let ffmpegPngOutput outFile =
       $"%s{outFile}.png" 
     ] |> String.concat " "
 
+let ffmpegApngOutput loop delay outFile =
+    [ // Use apng muxer and encoder
+      "-f"; "apng"
+      "-c:v"; "apng"
+      // Use apng settings
+      "-loop"; $"%i{loop}"
+      "-final_delay"; $"%i{delay}"
+      // File
+      $"%s{outFile}.apng" 
+    ] |> String.concat " "
+
 module CanvasRender =
     type [<AllowNullLiteral>] OffscreenCanvas =
         abstract height : float with get, set

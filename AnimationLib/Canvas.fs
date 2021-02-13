@@ -87,10 +87,12 @@ type CanvasRenderingContext2D with
     member __.lineHeight with set (value) = CanvasContext.lineHeight <- value
     member ctx.width = ctx.canvas.width
     member ctx.height = ctx.canvas.height
+    member ctx.measureTextExt (text) =
+        ctx.measureText (text) :?> ExtendedTextMetrics
     member ctx.actualLineHeight with get () = 
         let textHeight =
             let longText = String [|'0'..'z'|]
-            let m = ctx.measureText(longText) :?> ExtendedTextMetrics
+            let m = ctx.measureTextExt(longText)
             // Disable this one to unify rendering across Firefox and Chromium
             // if not (isNullOrUndefined m.fontBoundingBoxAscent) 
             // then m.fontBoundingBoxAscent + m.fontBoundingBoxDescent
@@ -169,8 +171,8 @@ type CanvasRenderingContext2D with
             ctx.stroke ()
             ctx.closePath ()
             ctx.restore ()
-    member ctx.drawText (textProgress : (char * float) seq, x, y) =
-        let dashLen = 180.
+    member ctx.drawTextByChar (textProgress : (char * float) seq, x, y, ?dashLen) =
+        let dashLen = defaultArg dashLen 180.
         let text = textProgress |> Seq.map fst |> Seq.toArray |> String
         for (i, (ch, progress)) in textProgress |> Seq.indexed do
             let ch = string ch
@@ -185,13 +187,13 @@ type CanvasRenderingContext2D with
                 ctx.globalAlpha <- alpha * (progress - 0.6) * 2.5
                 ctx.fillText(ch, x, y)
             ctx.restore ()
-    member ctx.drawText (text : string, x, y, progress, ?stagger) =
+    member ctx.drawText (text : string, x, y, progress, ?stagger, ?dashLen) =
         let stagger = defaultArg stagger 0.5
         let textProgress =
             text
             |> Seq.indexed
             |> Seq.map (fun (i, ch) -> ch, staggeredProgress stagger text.Length i progress)
-        ctx.drawText (textProgress, x, y)
+        ctx.drawTextByChar (textProgress, x, y, ?dashLen = dashLen)
     member ctx.drawLongText (text : (Style option * string option * string) list list, x, y, ?progress, ?stagger) = 
         let progress = defaultArg progress 1.
         let stagger = defaultArg stagger 0.5
@@ -218,7 +220,7 @@ type CanvasRenderingContext2D with
                 ctx.save ()
                 style |> Option.iter ctx.setStyle
                 font |> Option.iter (fun font -> ctx.font <- font)
-                ctx.drawText (textProgress, x, y)
+                ctx.drawTextByChar (textProgress, x, y)
                 ctx.restore ()
     member ctx.fluffyCircle (cX, cY, radius, ?fluffSize, ?seed) =
         let fluffSize = defaultArg fluffSize (radius / 3.)

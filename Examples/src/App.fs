@@ -281,12 +281,118 @@ let settings =
           Framerate = 25.</s> }
       BackgroundColor = "#000" }
 
-[ sunshine |> Scene.map (string); square; arrow ]
-|> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
-    ctx.clear ()
-    ctx.save ()
-    // ctx |> grid 100. (color "#eee")
-    render ctx tl t
-    ctx.restore ()
-))
-|> runCanvasApp settings "app"
+// [ sunshine |> Scene.map (string); square; arrow ]
+// |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
+//     ctx.clear ()
+//     ctx.save ()
+//     // ctx |> grid 100. (color "#eee")
+//     render ctx tl t
+//     ctx.restore ()
+// ))
+// |> runCanvasApp settings "app"
+
+let logoSettings = 
+    { RenderSettings =
+        { Width = 1024
+          Height = 512
+          Framerate = 30.</s> }
+      BackgroundColor = "#999" }
+
+type LogoColors =
+    { FanBackground : Style
+      Text : Style
+      FanbladeAccent1 : Style
+      FanbladeAccent2 : Style }
+
+let lightColors =
+    { FanBackground = color "#eee"
+      Text = color "#000"
+      FanbladeAccent1 = color "#378bba"
+      FanbladeAccent2 = color "#30b9db" }
+
+let darkColors =
+    { FanBackground = color "#444"
+      Text = color "#f9f9f9"
+      FanbladeAccent1 = color "#378bba"
+      FanbladeAccent2 = color "#30b9db" }
+
+let fanLogo version colors = scene $"fanLogo_%s{version}" {
+    run (timeline {
+        0. => vars {
+            "bladeRotation" => 0.
+        }
+        2000. => vars {
+            "bladeRotation" => (Math.PI * 8., EaseInQuad)
+        }
+        2750. => vars {
+            "fan" => 0.
+        }
+        3000. => vars {
+            "bladeRotation" => (Math.PI * 12., EaseOutQuad)
+        }
+        3750. => vars {
+            "fan" => 1.
+        }
+        4000. => vars {
+            "tagline" => 0.
+        }
+        4750. => vars {
+            "tagline" => 1.
+        }
+    })
+    render (fun (ctx : CanvasRenderingContext2D) tl ->
+        ctx.clear ()
+        ctx.save ()
+
+        let bladeHeight = 150.
+        let blade (x, y, col, rotation) =
+            ctx.save ()
+            ctx.lineWidth <- 3.
+            ctx.strokeStyle <- col
+            ctx.fillStyle  <- col
+            ctx.translate (x, y)
+            ctx.rotate (rotation)
+            ctx.beginPath ()
+            ctx.moveTo (0., 0.)
+            ctx.quadraticCurveTo (240., bladeHeight * (4./5.), 0., bladeHeight)
+            ctx.quadraticCurveTo (20., bladeHeight / 2., 0., 0.)
+            ctx.fill ()
+            ctx.stroke ()
+            ctx.restore ()
+
+        ctx.save ()
+        ctx.translate (256., ctx.height / 2.)
+        ctx.beginPath ()
+        ctx.lineWidth <- 3.
+        ctx.fillStyle <- colors.FanBackground
+        ctx.ellipse (0., 0., bladeHeight + 50.)
+        ctx.fill ()
+
+        ctx.rotate (tl.["bladeRotation"])
+        blade (0., 0., colors.FanbladeAccent2, 1.5 * Math.PI)
+        blade (0., 0., colors.FanbladeAccent2, 0.5 * Math.PI)
+        blade (0., 0., colors.FanbladeAccent1, Math.PI)
+        blade (0., 0., colors.FanbladeAccent1, 0.)
+        ctx.restore ()
+
+        let title = "Fan"
+        let tagline = "Animations in F#"
+
+        ctx.textBaseline <- "alphabetic"
+        ctx.lineWidth <- 2.
+        ctx.style <- colors.Text
+        ctx.font <- "256px Open Sans"
+        let titleMetrics = ctx.measureTextExt title
+        let yPos = (ctx.height + titleMetrics.actualBoundingBoxAscent) / 2. - 10.
+        ctx.drawText (title, 512., yPos, tl.["fan"], dashLen = 800.)
+
+        ctx.font <- "48px Open Sans"
+        let taglineMetrics = ctx.measureTextExt tagline
+        ctx.globalAlpha <- tl.["tagline"]
+        ctx.fillText (tagline, 512. + 20., yPos + taglineMetrics.actualBoundingBoxAscent + 32.)
+
+        ctx.restore ()
+    )
+}
+
+runCanvasApp logoSettings "app" [ fanLogo "light" lightColors; fanLogo "dark" darkColors ]
