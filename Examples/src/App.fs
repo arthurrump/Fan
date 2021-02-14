@@ -281,6 +281,10 @@ let settings =
           Framerate = 25.</s> }
       BackgroundColor = "#000" }
 
+// For the Intro to CTP animations:
+// module CTP = CTP.V5
+// CTP.scenes
+// Some of the examples above:
 // [ sunshine |> Scene.map (string); square; arrow ]
 // |> List.map (Scene.withRender (fun (ctx : CanvasRenderingContext2D) tl t render -> 
 //     ctx.clear ()
@@ -299,19 +303,22 @@ let logoSettings =
       BackgroundColor = "#999" }
 
 type LogoColors =
-    { FanBackground : Style
+    { Background : Style
+      FanBackground : Style
       Text : Style
       FanbladeAccent1 : Style
       FanbladeAccent2 : Style }
 
 let lightColors =
-    { FanBackground = color "#eee"
-      Text = color "#000"
+    { Background = color "#fff"
+      FanBackground = color "#eee"
+      Text = color "#060606"
       FanbladeAccent1 = color "#378bba"
       FanbladeAccent2 = color "#30b9db" }
 
 let darkColors =
-    { FanBackground = color "#444"
+    { Background = color "#000"
+      FanBackground = color "#444"
       Text = color "#f9f9f9"
       FanbladeAccent1 = color "#378bba"
       FanbladeAccent2 = color "#30b9db" }
@@ -324,11 +331,15 @@ let fanLogo version colors = scene $"fanLogo_%s{version}" {
         2000. => vars {
             "bladeRotation" => (Math.PI * 8., EaseInQuad)
         }
+        2500. => vars {
+            "background" => 0.
+        }
         2750. => vars {
             "fan" => 0.
         }
         3000. => vars {
             "bladeRotation" => (Math.PI * 12., EaseOutQuad)
+            "background" => 1.
         }
         3750. => vars {
             "fan" => 1.
@@ -345,6 +356,9 @@ let fanLogo version colors = scene $"fanLogo_%s{version}" {
         ctx.save ()
 
         let bladeHeight = 150.
+        let backgroundRadius = bladeHeight + 50.
+        let backBlockWidth = 540.
+        let x = (ctx.width - backBlockWidth) / 2.
         let blade (x, y, col, rotation) =
             ctx.save ()
             ctx.lineWidth <- 3.
@@ -361,11 +375,20 @@ let fanLogo version colors = scene $"fanLogo_%s{version}" {
             ctx.restore ()
 
         ctx.save ()
-        ctx.translate (256., ctx.height / 2.)
+        ctx.beginPath ()
+        ctx.globalAlpha <- tl.["background"]
+        ctx.fillStyle <- colors.Background
+        ctx.rect (x, ctx.height / 2. - backgroundRadius, backBlockWidth, 2. * backgroundRadius)
+        ctx.ellipse (x + backBlockWidth, ctx.height / 2., backgroundRadius)
+        ctx.fill ()
+        ctx.restore ()
+
+        ctx.save ()
+        ctx.translate (x, ctx.height / 2.)
         ctx.beginPath ()
         ctx.lineWidth <- 3.
         ctx.fillStyle <- colors.FanBackground
-        ctx.ellipse (0., 0., bladeHeight + 50.)
+        ctx.ellipse (0., 0., backgroundRadius)
         ctx.fill ()
 
         ctx.rotate (tl.["bladeRotation"])
@@ -376,23 +399,36 @@ let fanLogo version colors = scene $"fanLogo_%s{version}" {
         ctx.restore ()
 
         let title = "Fan"
+        let titleFont = "256px Open Sans"
         let tagline = "Animations in F#"
+        let taglineFont = "48px Open Sans"
 
-        ctx.textBaseline <- "alphabetic"
+        ctx.textBaseline <- "top"
         ctx.lineWidth <- 2.
         ctx.style <- colors.Text
-        ctx.font <- "256px Open Sans"
-        let titleMetrics = ctx.measureTextExt title
-        let yPos = (ctx.height + titleMetrics.actualBoundingBoxAscent) / 2. - 10.
-        ctx.drawText (title, 512., yPos, tl.["fan"], dashLen = 800.)
 
-        ctx.font <- "48px Open Sans"
+        ctx.font <- titleFont
+        let titleMetrics = ctx.measureTextExt title
+        ctx.font <- taglineFont
         let taglineMetrics = ctx.measureTextExt tagline
+        let textLineMargin = 24.
+        let titleHeight = -titleMetrics.actualBoundingBoxAscent + titleMetrics.actualBoundingBoxDescent 
+        let taglineHeight = -taglineMetrics.actualBoundingBoxAscent + taglineMetrics.actualBoundingBoxDescent
+        let totalTextHeight = titleHeight + taglineHeight + textLineMargin
+        let textX = x + backgroundRadius + 32.
+        let textY = (ctx.height - totalTextHeight) / 2.
+
+        ctx.font <- titleFont
+        ctx.drawText (title, textX, textY, tl.["fan"], dashLen = 800.)
+
+        ctx.font <- taglineFont
         ctx.globalAlpha <- tl.["tagline"]
-        ctx.fillText (tagline, 512. + 20., yPos + taglineMetrics.actualBoundingBoxAscent + 32.)
+        ctx.fillText (tagline, textX + 20., textY + titleMetrics.actualBoundingBoxDescent + taglineMetrics.actualBoundingBoxAscent + textLineMargin)
 
         ctx.restore ()
     )
 }
 
-runCanvasApp logoSettings "app" [ fanLogo "light" lightColors; fanLogo "dark" darkColors ]
+[ fanLogo "light" lightColors
+  fanLogo "dark" darkColors ]
+|> runCanvasApp logoSettings "app"
